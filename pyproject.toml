@@ -12,6 +12,7 @@ dependencies = [
     "uvicorn[standard]==0.42.0",
     "pydantic==2.12.5",
     "starlette==1.0.0",
+    "mcp>=1.26.0",
 ]
 
 [project.scripts]
