@@ -293,12 +293,17 @@ class ClaudeCodeIntegration:
         return settings_path
 
     def install_mcp(self) -> Path:
-        """Configure Opero MCP server in Claude Code settings.local.json."""
+        """Configure Opero MCP server via .mcp.json and enable it in settings."""
+        # 1. Write .mcp.json in project root (where Claude Code looks for MCP servers)
+        mcp_json_path = Path(self.project_path) / ".mcp.json"
+        mcp = self.get_mcp_config()
+        mcp_json_path.write_text(json.dumps(mcp, indent=2) + "\n")
+
+        # 2. Enable it in .claude/settings.local.json
         settings_dir = Path(self.project_path) / ".claude"
         settings_dir.mkdir(exist_ok=True)
-
-        # MCP servers go in settings.local.json (Claude Code reads MCP from here)
         local_path = settings_dir / "settings.local.json"
+
         existing = {}
         if local_path.exists():
             try:
@@ -306,14 +311,12 @@ class ClaudeCodeIntegration:
             except (json.JSONDecodeError, OSError):
                 pass
 
-        mcp = self.get_mcp_config()
-        if "mcpServers" not in existing:
-            existing["mcpServers"] = {}
-        existing["mcpServers"].update(mcp.get("mcpServers", {}))
+        # Enable all project MCP servers + explicitly enable opero
+        existing["enableAllProjectMcpServers"] = True
 
         local_path.write_text(json.dumps(existing, indent=2) + "\n")
 
-        # Also remove mcpServers from settings.json if present (cleanup)
+        # 3. Clean up stale mcpServers from settings.json if present
         settings_path = settings_dir / "settings.json"
         if settings_path.exists():
             try:
@@ -324,7 +327,7 @@ class ClaudeCodeIntegration:
             except (json.JSONDecodeError, OSError):
                 pass
 
-        return local_path
+        return mcp_json_path
 
     def _find_python(self) -> str:
         """Find the Python interpreter that has opero installed.

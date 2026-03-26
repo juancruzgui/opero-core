@@ -95,6 +95,7 @@ class OperoEngine:
             ".opero/",
             ".opero-core/",
             ".claude/",
+            ".mcp.json",
             "CLAUDE.md",
         ]
 
