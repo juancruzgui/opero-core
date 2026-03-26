@@ -11,39 +11,60 @@ from __future__ import annotations
 import json
 import os
 import signal
+import socket
 import subprocess
 import sys
 from pathlib import Path
 from urllib.error import URLError
 from urllib.request import urlopen
 
-# Default service definitions
-SERVICES = {
+
+# Default preferred ports (will find alternatives if taken)
+DEFAULT_PORTS = {
+    "frontend": 5173,
+    "backend": 8000,
+    "database": 54321,
+}
+
+# Service templates — port is filled in dynamically
+SERVICE_TEMPLATES = {
     "frontend": {
         "name": "Frontend (React)",
-        "port": 5173,
-        "start_cmd": ["npm", "run", "dev"],
-        "cwd_subdir": "",  # project root
-        "health_url": "http://localhost:5173",
+        "cwd_subdir": "",
         "icon": "⚛️",
     },
     "backend": {
         "name": "Backend (FastAPI)",
-        "port": 8000,
-        "start_cmd": ["uvicorn", "main:app", "--reload", "--port", "8000"],
         "cwd_subdir": "backend",
-        "health_url": "http://localhost:8000/health",
         "icon": "🐍",
     },
     "database": {
         "name": "Database (Supabase)",
-        "port": 54321,
-        "start_cmd": ["supabase", "start"],
         "cwd_subdir": "",
-        "health_url": "http://localhost:54321/rest/v1/",
         "icon": "🗄️",
     },
 }
+
+
+def _is_port_free(port: int) -> bool:
+    """Check if a port is available."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        try:
+            s.bind(("127.0.0.1", port))
+            return True
+        except OSError:
+            return False
+
+
+def _find_free_port(preferred: int, range_size: int = 100) -> int:
+    """Find a free port starting from preferred, scanning upward."""
+    for port in range(preferred, preferred + range_size):
+        if _is_port_free(port):
+            return port
+    # Fallback: let OS pick
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
 
 
 class ServiceManager:
@@ -53,6 +74,46 @@ class ServiceManager:
         self.project_path = str(Path(project_path).resolve())
         self._pid_dir = Path(self.project_path) / ".opero" / "pids"
         self._pid_dir.mkdir(parents=True, exist_ok=True)
+        self._ports_file = Path(self.project_path) / ".opero" / "ports.json"
+        self._ports = self._load_ports()
+
+    def _load_ports(self) -> dict:
+        """Load assigned ports or assign new ones."""
+        if self._ports_file.exists():
+            try:
+                return json.loads(self._ports_file.read_text())
+            except (json.JSONDecodeError, OSError):
+                pass
+        # Assign ports — find free ones
+        ports = {}
+        for svc, preferred in DEFAULT_PORTS.items():
+            ports[svc] = _find_free_port(preferred)
+        self._save_ports(ports)
+        return ports
+
+    def _save_ports(self, ports: dict):
+        self._ports_file.write_text(json.dumps(ports, indent=2))
+
+    def _get_service_config(self, service: str) -> dict:
+        """Get full service config with assigned port."""
+        tmpl = SERVICE_TEMPLATES.get(service, {})
+        port = self._ports.get(service, DEFAULT_PORTS.get(service, 0))
+        # Build start command with the assigned port
+        if service == "frontend":
+            start_cmd = ["npm", "run", "dev", "--", "--port", str(port)]
+        elif service == "backend":
+            start_cmd = ["uvicorn", "main:app", "--reload", "--port", str(port)]
+        elif service == "database":
+            start_cmd = ["supabase", "start"]
+            port = 54321  # supabase uses fixed ports
+        else:
+            start_cmd = []
+        return {
+            **tmpl,
+            "port": port,
+            "start_cmd": start_cmd,
+            "health_url": f"http://localhost:{port}",
+        }
 
     def _pid_file(self, service: str) -> Path:
         return self._pid_dir / f"{service}.pid"
@@ -65,7 +126,6 @@ class ServiceManager:
         if pf.exists():
             try:
                 pid = int(pf.read_text().strip())
-                # Check if process is still alive
                 os.kill(pid, 0)
                 return pid
             except (ValueError, ProcessLookupError, PermissionError):
@@ -77,22 +137,16 @@ class ServiceManager:
 
     def is_running(self, service: str) -> bool:
         """Check if a service is running via its PID or port."""
-        # Check PID first
         if self._read_pid(service):
             return True
-        # Fallback: check if port is in use
-        svc = SERVICES.get(service)
-        if svc:
-            try:
-                urlopen(svc["health_url"], timeout=1)
-                return True
-            except (URLError, OSError):
-                pass
+        svc = self._get_service_config(service)
+        if svc.get("port"):
+            return not _is_port_free(svc["port"])
         return False
 
     def status(self, service: str) -> dict:
         """Get status of a service."""
-        svc = SERVICES.get(service, {})
+        svc = self._get_service_config(service)
         running = self.is_running(service)
         pid = self._read_pid(service)
         return {
@@ -107,23 +161,30 @@ class ServiceManager:
 
     def status_all(self) -> list[dict]:
         """Get status of all services."""
-        return [self.status(s) for s in SERVICES]
+        return [self.status(s) for s in SERVICE_TEMPLATES]
 
     def start(self, service: str) -> dict:
         """Start a service."""
-        if service not in SERVICES:
+        if service not in SERVICE_TEMPLATES:
             return {"error": f"Unknown service: {service}"}
         if self.is_running(service):
             return self.status(service)
 
-        svc = SERVICES[service]
+        svc = self._get_service_config(service)
+
+        # Re-check port is still free, reassign if not
+        if not _is_port_free(svc["port"]):
+            new_port = _find_free_port(svc["port"])
+            self._ports[service] = new_port
+            self._save_ports(self._ports)
+            svc = self._get_service_config(service)
+
         cwd = self.project_path
-        if svc["cwd_subdir"]:
+        if svc.get("cwd_subdir"):
             cwd = str(Path(self.project_path) / svc["cwd_subdir"])
             if not Path(cwd).exists():
                 return {"error": f"Directory not found: {svc['cwd_subdir']}/"}
 
-        # Build log file path
         log_file = self._pid_dir / f"{service}.log"
 
         try:
@@ -134,7 +195,7 @@ class ServiceManager:
                     stdout=log,
                     stderr=log,
                     env={**os.environ, "OPERO_PROJECT_PATH": self.project_path},
-                    preexec_fn=os.setsid,  # new process group so we can kill cleanly
+                    preexec_fn=os.setsid,
                 )
             self._save_pid(service, proc.pid)
             return self.status(service)
