@@ -601,6 +601,7 @@ def cmd_go(args):
         os.getcwd(), project.id,
         parallel=args.parallel or 1,
         open_dashboard=not args.no_dashboard,
+        auto_permissions=args.auto,
     )
 
 
@@ -705,6 +706,7 @@ def main():
     go_parser = subparsers.add_parser("go", help="Launch interactive PM session (conversational)")
     go_parser.add_argument("--parallel", "-p", type=int, default=1, help="Parallel agents (default 1)")
     go_parser.add_argument("--no-dashboard", action="store_true", help="Don't auto-start dashboard")
+    go_parser.add_argument("--auto", action="store_true", help="Autonomous mode — skip all permission prompts")
 
     # agents
     subparsers.add_parser("agents", help="List registered agents")
@@ -749,7 +751,7 @@ def main():
                 return
 
             from opero.orchestrator.interactive import launch_interactive
-            launch_interactive(os.getcwd(), project.id)
+            launch_interactive(os.getcwd(), project.id, auto_permissions="--auto" in sys.argv)
         return
 
     commands = {

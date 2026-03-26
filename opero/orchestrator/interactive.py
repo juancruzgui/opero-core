@@ -150,7 +150,8 @@ def _build_resume_prompt(project_path: str, project_id: str) -> str:
 
 
 def launch_interactive(project_path: str, project_id: str,
-                       parallel: int = 1, open_dashboard: bool = True):
+                       parallel: int = 1, open_dashboard: bool = True,
+                       auto_permissions: bool = False):
     """Launch an interactive Claude Code session as the PM orchestrator."""
     mcp_config = _ensure_mcp_config(project_path)
     system_prompt = _build_system_prompt(project_path, project_id)
@@ -162,6 +163,8 @@ def launch_interactive(project_path: str, project_id: str,
     print("✦ Opero — AI Project Manager")
     print("  Describe what you want to build. I'll plan it, break it into tasks,")
     print("  and dispatch agents to build it.")
+    if auto_permissions:
+        print("  Mode: autonomous (skip permissions)")
     print()
     if open_dashboard:
         print("  Dashboard: http://localhost:7437")
@@ -172,6 +175,9 @@ def launch_interactive(project_path: str, project_id: str,
         "--mcp-config", mcp_config,
         "--system-prompt", system_prompt,
     ]
+
+    if auto_permissions:
+        cmd.insert(1, "--dangerously-skip-permissions")
 
     # If there's existing work, add a resume context as the initial prompt
     resume = _build_resume_prompt(project_path, project_id)
