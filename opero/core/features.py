@@ -17,6 +17,7 @@ Example:
 from __future__ import annotations
 
 from opero.core.models import Feature, FeatureStatus, Task, TaskType, TaskStatus, _new_id, _now
+from opero.core.events import emit
 from opero.core.tasks import TaskManager
 from opero.db.schema import get_connection
 
@@ -41,6 +42,7 @@ class FeatureManager:
         conn.execute(f"INSERT INTO features ({cols}) VALUES ({placeholders})", list(d.values()))
         conn.commit()
         conn.close()
+        emit(self.project_path, "feature.created", {"feature_id": feature.id, "title": feature.title, "status": feature.status.value})
         return feature
 
     def get(self, feature_id: str) -> Feature | None:
@@ -82,7 +84,10 @@ class FeatureManager:
         conn.execute(f"UPDATE features SET {sets} WHERE id = ?", list(kwargs.values()) + [feature_id])
         conn.commit()
         conn.close()
-        return self.get(feature_id)
+        updated = self.get(feature_id)
+        if updated:
+            emit(self.project_path, "feature.updated", {"feature_id": feature_id, "title": updated.title, "status": updated.status.value})
+        return updated
 
     def delete(self, feature_id: str) -> bool:
         conn = self._conn()

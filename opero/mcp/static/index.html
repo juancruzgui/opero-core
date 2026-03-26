@@ -319,7 +319,8 @@ function timeAgo(ds) {
   if (s < 5) return 'now'; if (s < 60) return s+'s'; if (s < 3600) return Math.floor(s/60)+'m'; return Math.floor(s/3600)+'h';
 }
 function toolIcon(n) {
-  return {'Edit':'✏️','Write':'📝','Bash':'⚡','Read':'📖','Grep':'🔍','Glob':'📁','session':'🔵','git':'📦'}[n]||'🔧';
+  return {'Edit':'✏️','Write':'📝','Bash':'⚡','Read':'📖','Grep':'🔍','Glob':'📁',
+    'session':'🔵','git':'📦','task':'📋','feature':'🏗️','memory':'🧠','user':'👤'}[n]||'🔧';
 }
 
 function renderCard(task, showFeature) {
@@ -496,12 +497,24 @@ async function loadActivity() {
         detail = `<strong>$</strong> <code>${esc((item.detail||'').slice(0,60))}</code>`;
       } else if (item.action === 'commit') {
         detail = `<strong>commit</strong> ${esc(item.detail||'')}`;
+      } else if (item.action === 'created' && item.tool_name === 'feature') {
+        detail = `<strong>Feature created</strong> ${esc(item.detail||'')}`;
+      } else if (item.action === 'updated' && item.tool_name === 'feature') {
+        detail = `<strong>Feature updated</strong> ${esc(item.detail||'')}`;
+      } else if (item.action === 'created' && item.tool_name === 'task') {
+        detail = `<strong>Task created</strong> ${esc(item.detail||'')}`;
+      } else if (item.action === 'updated' && item.tool_name === 'task') {
+        detail = `<strong>Task updated</strong> ${esc(item.detail||'')}`;
+      } else if (item.action === 'stored' && item.tool_name === 'memory') {
+        detail = `<strong>Memory stored</strong> ${esc(item.detail||'')}`;
+      } else if (item.action === 'prompt') {
+        detail = `<strong>User:</strong> ${esc((item.detail||'').slice(0,80))}`;
       } else if (item.action === 'heartbeat') {
         return '';
       } else if (item.action === 'stop') {
         detail = '<strong>session ended</strong>';
       } else {
-        detail = `<strong>${esc(item.tool_name)}</strong> ${esc(item.detail||'')}`;
+        detail = `<strong>${esc(item.tool_name)}.${esc(item.action)}</strong> ${esc(item.detail||'')}`;
       }
       const tb = item.task_id ? ` <span class="badge badge-agent">${item.task_id.slice(0,8)}</span>` : '';
       return `<div class="activity-item${isNew?' fresh':''}">

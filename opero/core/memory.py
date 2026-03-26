@@ -22,6 +22,7 @@ from enum import Enum
 from typing import Optional
 
 from opero.core.models import _new_id, _now
+from opero.core.events import emit
 from opero.db.schema import get_connection
 
 
@@ -278,6 +279,8 @@ class MemoryManager:
         conn.execute(f"INSERT INTO memory_entries ({cols}) VALUES ({placeholders})", list(d.values()))
         conn.commit()
         conn.close()
+
+        emit(self.project_path, "memory.stored", {"memory_id": entry.id, "title": entry.title, "type": entry.type.value})
 
         # Index for vector search
         self.vectors.index(entry.id, entry.search_text())

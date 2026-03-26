@@ -6,6 +6,7 @@ import json
 from datetime import datetime
 
 from opero.core.models import Task, TaskStatus, TaskType, _new_id, _now
+from opero.core.events import emit
 from opero.db.schema import get_connection
 
 
@@ -28,6 +29,7 @@ class TaskManager:
         conn.execute(f"INSERT INTO tasks ({cols}) VALUES ({placeholders})", list(d.values()))
         conn.commit()
         conn.close()
+        emit(self.project_path, "task.created", {"task_id": task.id, "title": task.title, "type": task.type.value, "status": task.status.value})
         return task
 
     def get(self, task_id: str) -> Task | None:
@@ -87,7 +89,10 @@ class TaskManager:
         conn.execute(f"UPDATE tasks SET {sets} WHERE id = ?", list(kwargs.values()) + [task_id])
         conn.commit()
         conn.close()
-        return self.get(task_id)
+        updated = self.get(task_id)
+        if updated:
+            emit(self.project_path, "task.updated", {"task_id": task_id, "title": updated.title, "status": updated.status.value})
+        return updated
 
     def delete(self, task_id: str) -> bool:
         conn = self._conn()
