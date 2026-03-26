@@ -63,8 +63,8 @@ class ClaudeCodeIntegration:
         sections.append("6. **Store learnings**: When discovering something important, run:")
         sections.append("   `opero memory store --type learning --title '...' --content '...' --source claude`")
         sections.append("7. **Search memory before deciding**: Run `opero memory search --query '...'` to check for prior decisions")
-        sections.append("8. **Commit with task refs**: Use `[task_id]` prefix in commit messages")
-        sections.append("9. **Sync after commits**: Run `opero sync` after committing")
+        sections.append("8. **DO NOT commit manually**: Opero auto-commits every file change you make, linked to the active task. Focus on writing code.")
+        sections.append("9. **DO NOT run git commands**: Opero handles all git operations automatically.")
         sections.append("")
 
         # Commands reference
@@ -378,8 +378,89 @@ def _parse_hook_input() -> dict:
     return {}
 
 
+def _auto_commit_and_remember(file_path: str, action: str, task_id: str | None, cwd: str):
+    """Auto-commit a file change and store a memory of what was done.
+
+    Acts like a real developer: every meaningful change gets committed
+    immediately with a descriptive message linked to the active task.
+    """
+    import subprocess
+
+    try:
+        # Check if the file is inside the project (not in .opero, .claude, etc.)
+        rel = os.path.relpath(file_path, cwd)
+        if rel.startswith(".opero") or rel.startswith(".claude") or rel == "CLAUDE.md":
+            return
+
+        # Check if file actually has changes
+        status = subprocess.run(
+            ["git", "-C", cwd, "status", "--porcelain", "--", file_path],
+            capture_output=True, text=True, check=False,
+        )
+        if not status.stdout.strip():
+            return  # No changes to commit
+
+        # Stage the file
+        subprocess.run(
+            ["git", "-C", cwd, "add", "--", file_path],
+            capture_output=True, check=False,
+        )
+
+        # Build commit message
+        fname = Path(file_path).name
+        verb = "Update" if action == "edit" else "Add"
+        task_prefix = f"[{task_id}] " if task_id else ""
+        commit_msg = f"{task_prefix}{verb} {fname}"
+
+        # Commit
+        result = subprocess.run(
+            ["git", "-C", cwd, "commit", "-m", commit_msg],
+            capture_output=True, text=True, check=False,
+        )
+
+        if result.returncode != 0:
+            return
+
+        # Get the commit SHA
+        sha_result = subprocess.run(
+            ["git", "-C", cwd, "rev-parse", "HEAD"],
+            capture_output=True, text=True, check=False,
+        )
+        sha = sha_result.stdout.strip()[:12] if sha_result.returncode == 0 else ""
+
+        # Store a memory of this change
+        from opero.core.memory import MemoryEntry, MemoryType
+        from opero.db.schema import get_connection
+
+        conn = get_connection(cwd)
+        row = conn.execute("SELECT id FROM projects WHERE path = ?", (cwd,)).fetchone()
+        conn.close()
+
+        if row:
+            project_id = row["id"]
+            engine = OperoEngine(cwd)
+            engine.memory.store(MemoryEntry(
+                project_id=project_id,
+                type=MemoryType.CONTEXT,
+                title=commit_msg,
+                content=f"File: {rel}\nAction: {action}\nCommit: {sha}",
+                tags=["auto-commit", action, Path(file_path).suffix.lstrip(".")],
+                source="claude",
+                source_ref=sha,
+                importance=4,
+            ))
+
+            # Sync commit to opero's git tracking
+            engine.git.sync_commits(project_id)
+
+        _log_activity("git", "commit", file_path, f"Committed: {commit_msg}")
+
+    except Exception:
+        pass
+
+
 def handle_post_tool(hook_input: dict = None):
-    """After a tool call, log activity and refresh CLAUDE.md if stale."""
+    """After a tool call: log activity, auto-commit code changes, store memory."""
     try:
         if hook_input is None:
             hook_input = _parse_hook_input()
@@ -414,17 +495,34 @@ def handle_post_tool(hook_input: dict = None):
         # Log the activity
         _log_activity(tool_name, action, file_path, detail)
 
+        # Auto-commit on Edit/Write (act like a real developer)
+        cwd = os.getcwd()
+        if tool_name in ("Edit", "Write") and file_path:
+            from opero.db.schema import get_connection
+            conn = get_connection(cwd)
+            row = conn.execute("SELECT id FROM projects WHERE path = ?", (cwd,)).fetchone()
+            project_id = row["id"] if row else None
+            task_id = None
+            if project_id:
+                task_row = conn.execute(
+                    "SELECT id FROM tasks WHERE project_id = ? AND status = 'in_progress' LIMIT 1",
+                    (project_id,),
+                ).fetchone()
+                task_id = task_row["id"] if task_row else None
+            conn.close()
+            _auto_commit_and_remember(file_path, action, task_id, cwd)
+
         # Refresh CLAUDE.md if stale (every 60s)
-        engine = OperoEngine(os.getcwd())
+        engine = OperoEngine(cwd)
         if not engine.is_initialized():
             return
 
-        claude_md = Path(os.getcwd()) / "CLAUDE.md"
+        claude_md = Path(cwd) / "CLAUDE.md"
         if claude_md.exists():
             age = datetime.utcnow().timestamp() - claude_md.stat().st_mtime
             if age < 60:
                 return
-        integration = ClaudeCodeIntegration(os.getcwd())
+        integration = ClaudeCodeIntegration(cwd)
         integration.write_claude_md()
     except Exception:
         pass
