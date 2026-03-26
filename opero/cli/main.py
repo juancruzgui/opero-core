@@ -8,7 +8,7 @@ import os
 import sys
 
 from opero.core.engine import OperoEngine
-from opero.core.models import Task, TaskType, TaskStatus
+from opero.core.models import Task, TaskType, TaskStatus, Feature, FeatureStatus
 from opero.core.memory import MemoryEntry, MemoryType
 
 
@@ -189,6 +189,112 @@ def cmd_tasks(args):
                 print(f"  Success criteria: {next_task.success_criteria}")
         else:
             print("✦ No tasks ready to execute.")
+
+
+def cmd_features(args):
+    """Manage features/epics."""
+    engine = get_engine()
+    if not engine.is_initialized():
+        print("✦ Project not initialized.")
+        return
+
+    project = engine.projects.get_by_path()
+    if not project:
+        print("✦ No project found.")
+        return
+
+    action = args.feature_action
+
+    if action == "list" or action is None:
+        features = engine.features.list_features(project.id)
+        if not features:
+            print("✦ No features. Create one: opero features add -t 'Auth System'")
+            return
+        print(f"✦ Features ({len(features)}):")
+        print()
+        for f in features:
+            progress = engine.features.get_progress(f.id)
+            bar = _progress_bar(progress["percent"])
+            print(f"  {f.id}  P{f.priority}  [{f.status.value:<8}]  {f.title}  {bar} {progress['done']}/{progress['total']}")
+            if f.description and args.verbose:
+                print(f"           {f.description}")
+
+    elif action == "add":
+        if not args.title:
+            print("✦ Title required: opero features add -t 'Auth System'")
+            return
+        feature = Feature(
+            project_id=project.id,
+            title=args.title,
+            description=args.desc or "",
+            priority=args.priority or 3,
+        )
+        created = engine.features.create(feature)
+        print(f"✦ Feature created: {created.id} — {created.title}")
+
+    elif action == "view":
+        if not args.id:
+            print("✦ Feature ID required: opero features view --id <id>")
+            return
+        feature = engine.features.get(args.id)
+        if not feature:
+            print(f"✦ Feature not found: {args.id}")
+            return
+        tasks = engine.features.get_tasks(args.id)
+        progress = engine.features.get_progress(args.id)
+        print(f"✦ Feature: {feature.title}")
+        print(f"  ID: {feature.id}")
+        print(f"  Status: {feature.status.value}")
+        print(f"  Progress: {_progress_bar(progress['percent'])} {progress['done']}/{progress['total']} ({progress['percent']}%)")
+        if feature.description:
+            print(f"  Description: {feature.description}")
+        if tasks:
+            print()
+            print("  Tasks:")
+            for t in tasks:
+                agent_str = f" [{t.assigned_agent}]" if t.assigned_agent else ""
+                print(f"    {t.id}  [{t.status.value:<11}]  {t.title}{agent_str}")
+
+    elif action == "update":
+        if not args.id:
+            print("✦ Feature ID required.")
+            return
+        updates = {}
+        if args.status:
+            updates["status"] = args.status
+        if args.title:
+            updates["title"] = args.title
+        if args.priority:
+            updates["priority"] = args.priority
+        if not updates:
+            print("✦ No updates specified.")
+            return
+        feature = engine.features.update(args.id, **updates)
+        if feature:
+            print(f"✦ Feature updated: {feature.id} — [{feature.status.value}] {feature.title}")
+        else:
+            print(f"✦ Feature not found: {args.id}")
+
+    elif action == "board":
+        board = engine.features.get_full_view(project.id)
+        if not board:
+            print("✦ No features yet.")
+            return
+        for item in board:
+            f = item["feature"]
+            p = item["progress"]
+            tasks = item["tasks"]
+            print(f"  ┌─ {f['title']}  [{f['status']}]  {_progress_bar(p['percent'])} {p['done']}/{p['total']}")
+            for t in tasks:
+                status_icon = "✓" if t["status"] == "done" else ">" if t["status"] == "in_progress" else "·" if t["status"] == "blocked" else " "
+                print(f"  │  {status_icon} {t['id']}  {t['title']}")
+            print(f"  └─")
+            print()
+
+
+def _progress_bar(percent: int, width: int = 10) -> str:
+    filled = round(width * percent / 100)
+    return f"[{'█' * filled}{'░' * (width - filled)}]"
 
 
 def cmd_sync(args):
@@ -447,6 +553,17 @@ def main():
     tasks_parser.add_argument("--agent", help="Agent name")
     tasks_parser.add_argument("--verbose", "-v", action="store_true")
 
+    # features
+    feat_parser = subparsers.add_parser("features", help="Manage features/epics")
+    feat_parser.add_argument("feature_action", nargs="?",
+                             choices=["list", "add", "view", "update", "board"])
+    feat_parser.add_argument("--id", help="Feature ID")
+    feat_parser.add_argument("--title", "-t", help="Feature title")
+    feat_parser.add_argument("--desc", help="Feature description")
+    feat_parser.add_argument("--status", "-s", choices=["planning", "active", "done", "paused"])
+    feat_parser.add_argument("--priority", "-p", type=int, choices=[1, 2, 3, 4, 5])
+    feat_parser.add_argument("--verbose", "-v", action="store_true")
+
     # sync
     subparsers.add_parser("sync", help="Sync git state with Opero")
 
@@ -509,6 +626,7 @@ def main():
         "start": cmd_start,
         "status": cmd_status,
         "tasks": cmd_tasks,
+        "features": cmd_features,
         "memory": cmd_memory,
         "claude": cmd_claude,
         "sync": cmd_sync,

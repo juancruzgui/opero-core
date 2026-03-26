@@ -5,9 +5,10 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from opero.core.models import Project, Task, TaskType
+from opero.core.models import Project, Task, TaskType, Feature, FeatureStatus
 from opero.core.projects import ProjectManager
 from opero.core.tasks import TaskManager
+from opero.core.features import FeatureManager
 from opero.core.memory import MemoryManager, MemoryEntry, MemoryType
 from opero.agents.registry import AgentRegistry
 from opero.git_integration.git_ops import GitManager
@@ -21,6 +22,7 @@ class OperoEngine:
         self.project_path = project_path or os.getcwd()
         self.projects = ProjectManager(self.project_path)
         self.tasks = TaskManager(self.project_path)
+        self.features = FeatureManager(self.project_path)
         self.memory = MemoryManager(self.project_path)
         self.agents = AgentRegistry(self.project_path)
         self.git = GitManager(self.project_path)

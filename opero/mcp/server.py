@@ -12,7 +12,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from opero.core.engine import OperoEngine
-from opero.core.models import Task, TaskType, TaskStatus
+from opero.core.models import Task, TaskType, TaskStatus, Feature, FeatureStatus
 from opero.core.memory import MemoryEntry, MemoryType
 
 app = FastAPI(title="Opero Core MCP", version="0.1.0")
@@ -120,6 +120,29 @@ class LinkMemoryRequest(BaseModel):
     relationship: str = "related"
 
 
+class CreateFeatureRequest(BaseModel):
+    project_id: str
+    title: str
+    description: str = ""
+    priority: int = 3
+
+
+class UpdateFeatureRequest(BaseModel):
+    status: Optional[str] = None
+    title: Optional[str] = None
+    description: Optional[str] = None
+    priority: Optional[int] = None
+
+
+class AddFeatureTaskRequest(BaseModel):
+    feature_id: str
+    title: str
+    description: str = ""
+    type: str = "feature"
+    priority: int = 3
+    success_criteria: str = ""
+
+
 # --- Endpoints ---
 
 @app.get("/")
@@ -225,6 +248,79 @@ def run_task(req: RunTaskRequest):
         raise HTTPException(status_code=404, detail="Task not found")
     execution = engine.agents.run_task(task)
     return {"execution": execution.to_dict()}
+
+
+# --- Features ---
+
+@app.post("/feature/create")
+def create_feature(req: CreateFeatureRequest):
+    engine = get_engine()
+    feature = Feature(
+        project_id=req.project_id,
+        title=req.title,
+        description=req.description,
+        priority=req.priority,
+    )
+    created = engine.features.create(feature)
+    return {"feature": created.to_dict()}
+
+
+@app.get("/features/{project_id}")
+def list_features(project_id: str, status: Optional[str] = None):
+    engine = get_engine()
+    features = engine.features.list_features(
+        project_id, status=FeatureStatus(status) if status else None,
+    )
+    return {"features": [f.to_dict() for f in features]}
+
+
+@app.get("/feature/{feature_id}")
+def get_feature(feature_id: str):
+    engine = get_engine()
+    feature = engine.features.get(feature_id)
+    if not feature:
+        raise HTTPException(status_code=404, detail="Feature not found")
+    tasks = engine.features.get_tasks(feature_id)
+    progress = engine.features.get_progress(feature_id)
+    return {"feature": feature.to_dict(), "tasks": [t.to_dict() for t in tasks], "progress": progress}
+
+
+@app.put("/feature/{feature_id}")
+def update_feature(feature_id: str, req: UpdateFeatureRequest):
+    engine = get_engine()
+    updates = {k: v for k, v in req.model_dump().items() if v is not None}
+    if not updates:
+        raise HTTPException(status_code=400, detail="No updates provided")
+    feature = engine.features.update(feature_id, **updates)
+    if not feature:
+        raise HTTPException(status_code=404, detail="Feature not found")
+    return {"feature": feature.to_dict()}
+
+
+@app.post("/feature/task")
+def add_feature_task(req: AddFeatureTaskRequest):
+    engine = get_engine()
+    feature = engine.features.get(req.feature_id)
+    if not feature:
+        raise HTTPException(status_code=404, detail="Feature not found")
+    task = Task(
+        project_id=feature.project_id,
+        feature_id=req.feature_id,
+        title=req.title,
+        description=req.description,
+        type=TaskType(req.type),
+        priority=req.priority,
+        success_criteria=req.success_criteria,
+    )
+    created = engine.features.add_task(req.feature_id, task)
+    return {"task": created.to_dict()}
+
+
+@app.get("/features/board/{project_id}")
+def features_board(project_id: str):
+    """Full board view: all features with tasks and progress."""
+    engine = get_engine()
+    return {"features": engine.features.get_full_view(project_id)}
 
 
 @app.get("/executions/active")

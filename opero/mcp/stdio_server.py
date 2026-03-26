@@ -25,7 +25,7 @@ from typing import Any
 
 from opero.core.engine import OperoEngine
 from opero.core.memory import MemoryEntry, MemoryType
-from opero.core.models import Task, TaskType, TaskStatus
+from opero.core.models import Task, TaskType, TaskStatus, Feature, FeatureStatus
 
 
 def get_engine() -> OperoEngine:
@@ -153,6 +153,68 @@ TOOLS = [
         },
     },
     {
+        "name": "opero_feature_create",
+        "description": "Create a feature/epic to group related tasks. E.g. 'Authentication System', 'Task Management UI'. All tasks should belong to a feature.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string", "description": "Feature name, e.g. 'Auth System'"},
+                "description": {"type": "string", "description": "What this feature delivers"},
+                "priority": {"type": "integer", "minimum": 1, "maximum": 5, "default": 3},
+            },
+            "required": ["title"],
+        },
+    },
+    {
+        "name": "opero_feature_list",
+        "description": "List all features/epics with their progress",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "status": {"type": "string", "enum": ["planning", "active", "done", "paused"]},
+            },
+        },
+    },
+    {
+        "name": "opero_feature_task",
+        "description": "Add a task under a feature. Use this instead of opero_task_create when the task belongs to a feature.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "feature_id": {"type": "string"},
+                "title": {"type": "string"},
+                "description": {"type": "string"},
+                "type": {"type": "string", "enum": ["feature", "bug", "research", "agent_task", "setup"], "default": "feature"},
+                "priority": {"type": "integer", "minimum": 1, "maximum": 5, "default": 3},
+                "success_criteria": {"type": "string"},
+            },
+            "required": ["feature_id", "title"],
+        },
+    },
+    {
+        "name": "opero_feature_get",
+        "description": "Get a feature with all its tasks and progress percentage",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "feature_id": {"type": "string"},
+            },
+            "required": ["feature_id"],
+        },
+    },
+    {
+        "name": "opero_feature_update",
+        "description": "Update a feature status (planning, active, done, paused)",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "feature_id": {"type": "string"},
+                "status": {"type": "string", "enum": ["planning", "active", "done", "paused"]},
+            },
+            "required": ["feature_id"],
+        },
+    },
+    {
         "name": "opero_memory_link",
         "description": "Link a memory entry to a task, commit, file, or another memory",
         "inputSchema": {
@@ -260,6 +322,62 @@ def handle_tool(name: str, arguments: dict) -> Any:
             task_id=arguments.get("task_id"),
             tool="claude",
         )
+
+    elif name == "opero_feature_create":
+        feature = Feature(
+            project_id=pid,
+            title=arguments["title"],
+            description=arguments.get("description", ""),
+            priority=arguments.get("priority", 3),
+        )
+        created = engine.features.create(feature)
+        return {"id": created.id, "title": created.title, "status": created.status.value}
+
+    elif name == "opero_feature_list":
+        status = FeatureStatus(arguments["status"]) if arguments.get("status") else None
+        features = engine.features.list_features(pid, status=status)
+        result = []
+        for f in features:
+            progress = engine.features.get_progress(f.id)
+            result.append({
+                "id": f.id, "title": f.title, "status": f.status.value,
+                "priority": f.priority, "description": f.description,
+                "progress": progress,
+            })
+        return {"features": result}
+
+    elif name == "opero_feature_task":
+        task = Task(
+            project_id=pid,
+            feature_id=arguments["feature_id"],
+            title=arguments["title"],
+            description=arguments.get("description", ""),
+            type=TaskType(arguments.get("type", "feature")),
+            priority=arguments.get("priority", 3),
+            success_criteria=arguments.get("success_criteria", ""),
+        )
+        created = engine.features.add_task(arguments["feature_id"], task)
+        return {"id": created.id, "title": created.title, "feature_id": arguments["feature_id"]}
+
+    elif name == "opero_feature_get":
+        feature = engine.features.get(arguments["feature_id"])
+        if not feature:
+            return {"error": "Feature not found"}
+        tasks = engine.features.get_tasks(arguments["feature_id"])
+        progress = engine.features.get_progress(arguments["feature_id"])
+        return {
+            "feature": {"id": feature.id, "title": feature.title, "status": feature.status.value},
+            "tasks": [{"id": t.id, "title": t.title, "status": t.status.value, "type": t.type.value} for t in tasks],
+            "progress": progress,
+        }
+
+    elif name == "opero_feature_update":
+        fid = arguments["feature_id"]
+        updates = {k: v for k, v in arguments.items() if k != "feature_id" and v is not None}
+        feature = engine.features.update(fid, **updates)
+        if not feature:
+            return {"error": "Feature not found"}
+        return {"id": feature.id, "title": feature.title, "status": feature.status.value}
 
     elif name == "opero_git_sync":
         return engine.sync()

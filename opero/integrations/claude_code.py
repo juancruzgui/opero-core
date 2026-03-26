@@ -53,32 +53,35 @@ class ClaudeCodeIntegration:
         sections.append("")
         sections.append("This project is managed by Opero Core. You MUST follow these rules:")
         sections.append("")
-        sections.append("### Rules")
-        sections.append("1. **Check tasks before working**: Run `opero tasks` to see current tasks")
-        sections.append("2. **No work without a task**: Before writing code, ensure a task exists. Create one with `opero tasks add --title '...'`")
-        sections.append("3. **Update task status**: When starting work, run `opero tasks update --id <id> --status in_progress`")
-        sections.append("4. **Complete tasks**: When done, run `opero tasks update --id <id> --status done`")
-        sections.append("5. **Store decisions**: When making architectural decisions, run:")
-        sections.append("   `opero memory store --type decision --title '...' --content '...' --source claude`")
-        sections.append("6. **Store learnings**: When discovering something important, run:")
-        sections.append("   `opero memory store --type learning --title '...' --content '...' --source claude`")
-        sections.append("7. **Search memory before deciding**: Run `opero memory search --query '...'` to check for prior decisions")
-        sections.append("8. **DO NOT commit manually**: Opero auto-commits every file change you make, linked to the active task. Focus on writing code.")
-        sections.append("9. **DO NOT run git commands**: Opero handles all git operations automatically.")
+        sections.append("### Workflow")
+        sections.append("Work is organized as: **Project → Features → Tasks**")
+        sections.append("")
+        sections.append("1. **Check features first**: Run `opero features` to see what's being built")
+        sections.append("2. **Create features for new work**: `opero features add -t 'Auth System'` — group related tasks")
+        sections.append("3. **Activate feature**: `opero features update --id <id> --status active`")
+        sections.append("4. **Create tasks under features**: Tasks must belong to a feature")
+        sections.append("5. **Update task status**: `in_progress` when starting, `done` when finished")
+        sections.append("6. **Store decisions**: When making architectural choices")
+        sections.append("7. **Store learnings**: When discovering gotchas or insights")
+        sections.append("8. **Search memory before deciding**: Check for prior decisions")
+        sections.append("9. **DO NOT commit manually**: Opero auto-commits every file change, linked to the active task")
+        sections.append("10. **DO NOT run git commands**: Opero handles all git operations")
         sections.append("")
 
         # Commands reference
         sections.append("### Available Commands")
         sections.append("```")
         sections.append("opero status                           # Full system state")
+        sections.append("opero features                         # List features with progress")
+        sections.append("opero features add -t 'Feature name'   # Create feature")
+        sections.append("opero features view --id X             # View feature + tasks")
+        sections.append("opero features board                   # Full board view")
         sections.append("opero tasks                            # List all tasks")
         sections.append("opero tasks next                       # Get next priority task")
         sections.append("opero tasks add --title '...'          # Create task")
         sections.append("opero tasks update --id X --status Y   # Update task")
         sections.append("opero memory search --query '...'      # Search memory")
         sections.append("opero memory store --type T --title X  # Store memory")
-        sections.append("opero memory list                      # List all memories")
-        sections.append("opero memory context --query '...'     # Get full context")
         sections.append("opero sync                             # Sync git state")
         sections.append("```")
         sections.append("")
@@ -147,16 +150,31 @@ class ClaudeCodeIntegration:
                 sections.append(f"- **{i.title}**: {i.content}")
             sections.append("")
 
-        # Current tasks
+        # Features and tasks
+        board = self.engine.features.get_full_view(project.id)
+        if board:
+            sections.append("## Features")
+            for item in board:
+                f = item["feature"]
+                p = item["progress"]
+                if f["status"] in ("planning", "active"):
+                    sections.append(f"### {f['title']} [{f['status']}] — {p['done']}/{p['total']} tasks done")
+                    if f.get("description"):
+                        sections.append(f"{f['description']}")
+                    for t in item["tasks"]:
+                        if t["status"] in ("todo", "in_progress"):
+                            icon = ">" if t["status"] == "in_progress" else " "
+                            sections.append(f"- [{icon}] `{t['id']}` [{t['type']}] {t['title']}")
+                    sections.append("")
+
+        # Unassigned tasks (not in any feature)
         all_tasks = self.engine.tasks.list_tasks(project_id=project.id)
-        active_tasks = [t for t in all_tasks if t.status.value in ("todo", "in_progress")]
-        if active_tasks:
-            sections.append("## Active Tasks")
-            for t in active_tasks:
+        orphan_tasks = [t for t in all_tasks if not t.feature_id and t.status.value in ("todo", "in_progress")]
+        if orphan_tasks:
+            sections.append("## Unassigned Tasks (need a feature)")
+            for t in orphan_tasks:
                 status_icon = ">" if t.status.value == "in_progress" else " "
                 sections.append(f"- [{status_icon}] `{t.id}` P{t.priority} [{t.type.value}] {t.title}")
-                if t.description:
-                    sections.append(f"  {t.description}")
             sections.append("")
 
         # Git state

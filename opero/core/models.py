@@ -25,6 +25,13 @@ class TaskStatus(str, Enum):
     BLOCKED = "blocked"
 
 
+class FeatureStatus(str, Enum):
+    PLANNING = "planning"
+    ACTIVE = "active"
+    DONE = "done"
+    PAUSED = "paused"
+
+
 class ExecutionStatus(str, Enum):
     PENDING = "pending"
     RUNNING = "running"
@@ -57,9 +64,42 @@ class Project:
 
 
 @dataclass
+class Feature:
+    id: str = field(default_factory=_new_id)
+    project_id: str = ""
+    title: str = ""
+    description: str = ""
+    status: FeatureStatus = FeatureStatus.PLANNING
+    priority: int = 3
+    created_at: str = field(default_factory=_now)
+    updated_at: str = field(default_factory=_now)
+    completed_at: Optional[str] = None
+
+    def to_dict(self) -> dict:
+        d = asdict(self)
+        d["status"] = self.status.value
+        return d
+
+    @classmethod
+    def from_row(cls, row: dict) -> Feature:
+        return cls(
+            id=row["id"],
+            project_id=row["project_id"],
+            title=row["title"],
+            description=row.get("description", ""),
+            status=FeatureStatus(row["status"]),
+            priority=row.get("priority", 3),
+            created_at=row.get("created_at", ""),
+            updated_at=row.get("updated_at", ""),
+            completed_at=row.get("completed_at"),
+        )
+
+
+@dataclass
 class Task:
     id: str = field(default_factory=_new_id)
     project_id: str = ""
+    feature_id: Optional[str] = None
     title: str = ""
     description: str = ""
     type: TaskType = TaskType.FEATURE
@@ -92,6 +132,7 @@ class Task:
         return cls(
             id=row["id"],
             project_id=row["project_id"],
+            feature_id=row.get("feature_id"),
             title=row["title"],
             description=row.get("description", ""),
             type=TaskType(row["type"]),

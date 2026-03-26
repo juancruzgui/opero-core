@@ -16,9 +16,23 @@ CREATE TABLE IF NOT EXISTS projects (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS features (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT,
+    status TEXT NOT NULL DEFAULT 'planning' CHECK(status IN ('planning', 'active', 'done', 'paused')),
+    priority INTEGER NOT NULL DEFAULT 3 CHECK(priority BETWEEN 1 AND 5),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    completed_at TIMESTAMP,
+    FOREIGN KEY (project_id) REFERENCES projects(id)
+);
+
 CREATE TABLE IF NOT EXISTS tasks (
     id TEXT PRIMARY KEY,
     project_id TEXT NOT NULL,
+    feature_id TEXT,
     title TEXT NOT NULL,
     description TEXT,
     type TEXT NOT NULL CHECK(type IN ('feature', 'bug', 'research', 'agent_task', 'setup')),
@@ -34,6 +48,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     completed_at TIMESTAMP,
     FOREIGN KEY (project_id) REFERENCES projects(id),
+    FOREIGN KEY (feature_id) REFERENCES features(id),
     FOREIGN KEY (parent_task_id) REFERENCES tasks(id)
 );
 
