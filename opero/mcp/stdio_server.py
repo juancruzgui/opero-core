@@ -638,13 +638,16 @@ def handle_tool(name: str, arguments: dict) -> Any:
 # ---------------------------------------------------------------------------
 
 def read_message() -> dict | None:
-    """Read a JSON-RPC message from stdin."""
-    # MCP uses Content-Length header framing
+    """Read a JSON-RPC message from stdin (binary mode)."""
+    stdin = sys.stdin.buffer if hasattr(sys.stdin, 'buffer') else sys.stdin
+
+    # Read headers
     headers = {}
     while True:
-        line = sys.stdin.readline()
+        line = stdin.readline()
         if not line:
             return None
+        line = line.decode('utf-8') if isinstance(line, bytes) else line
         line = line.strip()
         if not line:
             break
@@ -656,14 +659,28 @@ def read_message() -> dict | None:
     if content_length == 0:
         return None
 
-    body = sys.stdin.read(content_length)
+    body = stdin.read(content_length)
+    if isinstance(body, bytes):
+        body = body.decode('utf-8')
     return json.loads(body)
 
 
 def send_message(msg: dict) -> None:
-    """Send a JSON-RPC message to stdout."""
+    """Send a JSON-RPC message to stdout (binary mode)."""
     body = json.dumps(msg)
-    header = f"Content-Length: {len(body)}\r\n\r\n"
+    body_bytes = body.encode('utf-8')
+    header = f"Content-Length: {len(body_bytes)}\r\n\r\n"
+
+    stdout = sys.stdout.buffer if hasattr(sys.stdout, 'buffer') else sys.stdout
+    if hasattr(stdout, 'write') and isinstance(b'', bytes):
+        try:
+            stdout.write(header.encode('utf-8'))
+            stdout.write(body_bytes)
+            stdout.flush()
+            return
+        except TypeError:
+            pass
+    # Fallback to text mode
     sys.stdout.write(header)
     sys.stdout.write(body)
     sys.stdout.flush()
@@ -688,12 +705,6 @@ def send_error(request_id: Any, code: int, message: str) -> None:
 def main():
     """Run the MCP stdio server."""
     import traceback
-
-    # Ensure stdout is unbuffered for MCP framing
-    try:
-        sys.stdout = open(sys.stdout.fileno(), 'w', buffering=1)
-    except Exception:
-        pass  # Fall back to default buffering
 
     while True:
         try:
