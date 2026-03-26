@@ -102,6 +102,18 @@ TOOL_DEFS = [
         "memory_id": {"type": "string"}, "linked_type": {"type": "string", "enum": ["task", "commit", "memory", "file"]},
         "linked_id": {"type": "string"}, "relationship": {"type": "string", "default": "related"},
     }),
+    ("opero_verify_task", "Tester tool: mark a task as verified (passed) or failed with test results", {
+        "task_id": {"type": "string"},
+        "verified": {"type": "boolean"},
+        "test_results": {"type": "string"},
+        "failure_reason": {"type": "string"},
+    }),
+    ("opero_orchestrator_status", "Get current orchestrator loop status: phase, iteration, active agents, progress", {}),
+    ("opero_agent_status", "Agent reports its current status/heartbeat so dashboard can show real-time state", {
+        "agent_name": {"type": "string"},
+        "task_id": {"type": "string"},
+        "status_message": {"type": "string"},
+    }),
 ]
 
 REQUIRED_FIELDS = {
@@ -116,6 +128,8 @@ REQUIRED_FIELDS = {
     "opero_start_work": ["user_request", "intent", "task_title"],
     "opero_complete_work": ["task_id", "outcome"],
     "opero_memory_link": ["memory_id", "linked_type", "linked_id"],
+    "opero_verify_task": ["task_id", "verified"],
+    "opero_agent_status": ["agent_name"],
 }
 
 
@@ -216,6 +230,122 @@ def _handle_complete_work(engine, pid, args):
 
 
 # ---------------------------------------------------------------------------
+# Verify / Orchestrator / Agent Status handlers
+# ---------------------------------------------------------------------------
+
+def _handle_verify_task(engine, pid, args):
+    task_id = args["task_id"]
+    verified = args["verified"]
+    test_results = args.get("test_results", "")
+    failure_reason = args.get("failure_reason", "")
+
+    task = engine.tasks.get(task_id)
+    if not task:
+        return {"error": f"Task {task_id} not found"}
+
+    from opero.db.schema import get_connection
+    conn = get_connection(engine.project_path)
+
+    if verified:
+        conn.execute("UPDATE tasks SET verification_status = 'passed' WHERE id = ?", (task_id,))
+        conn.commit()
+        conn.close()
+        # Store test results as memory
+        engine.memory.store(MemoryEntry(
+            project_id=pid, type=MemoryType.LEARNING,
+            title=f"Test passed: {task.title}",
+            content=test_results, tags=["test", "passed"],
+            source="claude", source_ref=task_id, importance=3,
+        ))
+        return {"task_id": task_id, "verification_status": "passed", "message": "Task verified successfully"}
+    else:
+        conn.execute("UPDATE tasks SET verification_status = 'failed', status = 'todo' WHERE id = ?", (task_id,))
+        conn.commit()
+        conn.close()
+        # Create a fix subtask under the same feature
+        fix_task = engine.tasks.create(Task(
+            project_id=pid,
+            feature_id=task.feature_id,
+            title=f"Fix: {task.title} — {failure_reason[:80]}",
+            description=f"Verification failed for task {task_id}.\n\nFailure: {failure_reason}\n\nTest results:\n{test_results}",
+            type=TaskType.BUG,
+            priority=2,
+            parent_task_id=task_id,
+            success_criteria=task.success_criteria,
+        ))
+        return {
+            "task_id": task_id, "verification_status": "failed",
+            "fix_task_id": fix_task.id, "failure_reason": failure_reason,
+        }
+
+
+def _handle_orchestrator_status(engine, pid):
+    from opero.db.schema import get_connection
+    conn = get_connection(engine.project_path)
+    run = conn.execute(
+        "SELECT * FROM orchestrator_runs WHERE project_id = ? ORDER BY started_at DESC LIMIT 1",
+        (pid,)
+    ).fetchone()
+    if not run:
+        conn.close()
+        return {"status": "no_runs", "message": "No orchestrator runs found"}
+
+    # Task progress
+    tasks = engine.tasks.list_tasks(project_id=pid)
+    total = len(tasks)
+    by_status = {}
+    verified = 0
+    for t in tasks:
+        by_status[t.status.value] = by_status.get(t.status.value, 0) + 1
+    # Count verified via raw query
+    verified = conn.execute(
+        "SELECT COUNT(*) FROM tasks WHERE project_id = ? AND verification_status = 'passed'", (pid,)
+    ).fetchone()[0]
+
+    # Active executions
+    active = conn.execute(
+        "SELECT agent_name, task_id FROM task_executions WHERE status = 'running'"
+    ).fetchall()
+    conn.close()
+
+    return {
+        "run": dict(run),
+        "progress": {
+            "total": total,
+            "todo": by_status.get("todo", 0),
+            "in_progress": by_status.get("in_progress", 0),
+            "done": by_status.get("done", 0),
+            "blocked": by_status.get("blocked", 0),
+            "verified": verified,
+        },
+        "active_agents": [{"agent": r["agent_name"], "task_id": r["task_id"]} for r in active],
+    }
+
+
+def _handle_agent_status(engine, pid, args):
+    agent_name = args["agent_name"]
+    task_id = args.get("task_id")
+    status_message = args.get("status_message", "")
+    from opero.db.schema import get_connection
+    conn = get_connection(engine.project_path)
+    # Use agent_name as session id for agent-launched instances
+    session_id = f"agent-{agent_name}"
+    conn.execute(
+        """INSERT INTO claude_sessions (id, project_id, status, current_task_id, last_heartbeat, started_at)
+           VALUES (?, ?, 'active', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+           ON CONFLICT(id) DO UPDATE SET last_heartbeat = CURRENT_TIMESTAMP, current_task_id = ?, status = 'active'""",
+        (session_id, pid, task_id, task_id),
+    )
+    conn.execute(
+        "INSERT INTO claude_activity (project_id, session_id, tool_name, action, task_id, detail) VALUES (?, ?, ?, ?, ?, ?)",
+        (pid, session_id, "agent", "heartbeat", task_id, f"[{agent_name}] {status_message}"),
+    )
+    conn.commit()
+    conn.close()
+    return {"agent_name": agent_name, "session_id": session_id, "status": "active"}
+
+
+# ---------------------------------------------------------------------------
 # Tool dispatcher
 # ---------------------------------------------------------------------------
 
@@ -272,6 +402,12 @@ def handle_tool(name: str, arguments: dict) -> Any:
     elif name == "opero_memory_link":
         l = engine.memory.link(arguments["memory_id"], arguments["linked_type"], arguments["linked_id"], arguments.get("relationship", "related"))
         return {"id": l.id}
+    elif name == "opero_verify_task":
+        return _handle_verify_task(engine, pid, arguments)
+    elif name == "opero_orchestrator_status":
+        return _handle_orchestrator_status(engine, pid)
+    elif name == "opero_agent_status":
+        return _handle_agent_status(engine, pid, arguments)
     return {"error": f"Unknown tool: {name}"}
 
 

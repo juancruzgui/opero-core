@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     parent_task_id TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    verification_status TEXT,
     completed_at TIMESTAMP,
     FOREIGN KEY (project_id) REFERENCES projects(id),
     FOREIGN KEY (feature_id) REFERENCES features(id),
@@ -67,6 +68,7 @@ CREATE TABLE IF NOT EXISTS task_executions (
     status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'running', 'completed', 'failed')),
     output TEXT,
     error TEXT,
+    orchestrator_run_id TEXT,
     started_at TIMESTAMP,
     completed_at TIMESTAMP,
     FOREIGN KEY (task_id) REFERENCES tasks(id),
@@ -168,6 +170,19 @@ CREATE TABLE IF NOT EXISTS claude_sessions (
     last_heartbeat TIMESTAMP,
     started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     stopped_at TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS orchestrator_runs (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'running',
+    phase TEXT NOT NULL DEFAULT 'planning',
+    iteration INTEGER NOT NULL DEFAULT 1,
+    spec_text TEXT,
+    config TEXT,
+    started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    completed_at TIMESTAMP,
+    FOREIGN KEY (project_id) REFERENCES projects(id)
 );
 """
 

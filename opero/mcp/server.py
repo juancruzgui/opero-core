@@ -512,6 +512,171 @@ def list_agents():
     return {"agents": [a.to_dict() for a in agents]}
 
 
+@app.get("/agents/workbench")
+def agents_workbench():
+    """Live agent status: what each agent is working on, execution history, stats."""
+    engine = get_engine()
+    from opero.db.schema import get_connection
+    conn = get_connection(engine.project_path)
+    agents = engine.agents.list_agents()
+
+    result = []
+    for a in agents:
+        # Current running execution
+        running = conn.execute(
+            """SELECT te.*, t.title as task_title, t.description as task_description
+               FROM task_executions te
+               LEFT JOIN tasks t ON te.task_id = t.id
+               WHERE te.agent_name = ? AND te.status = 'running'
+               ORDER BY te.started_at DESC LIMIT 1""",
+            (a.name,),
+        ).fetchone()
+
+        # Stats
+        stats = conn.execute(
+            """SELECT
+                COUNT(*) as total,
+                SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
+                SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed
+               FROM task_executions WHERE agent_name = ?""",
+            (a.name,),
+        ).fetchone()
+
+        # Last activity
+        last_activity = conn.execute(
+            "SELECT created_at FROM claude_activity WHERE session_id = ? ORDER BY created_at DESC LIMIT 1",
+            (f"agent-{a.name}",),
+        ).fetchone()
+
+        # Session info
+        session = conn.execute(
+            "SELECT * FROM claude_sessions WHERE id = ?",
+            (f"agent-{a.name}",),
+        ).fetchone()
+
+        agent_data = {
+            "name": a.name,
+            "description": a.description,
+            "capabilities": a.capabilities,
+            "status": "working" if running else "idle",
+            "current_task": None,
+            "stats": {
+                "completed": dict(stats)["completed"] or 0 if stats else 0,
+                "failed": dict(stats)["failed"] or 0 if stats else 0,
+                "total": dict(stats)["total"] or 0 if stats else 0,
+            },
+            "last_activity": dict(last_activity)["created_at"] if last_activity else None,
+        }
+
+        if running:
+            r = dict(running)
+            agent_data["current_task"] = {
+                "task_id": r["task_id"],
+                "title": r.get("task_title", ""),
+                "started_at": r["started_at"],
+            }
+
+        result.append(agent_data)
+
+    # Recent executions across all agents (timeline)
+    recent = conn.execute(
+        """SELECT te.*, t.title as task_title
+           FROM task_executions te
+           LEFT JOIN tasks t ON te.task_id = t.id
+           ORDER BY COALESCE(te.completed_at, te.started_at) DESC LIMIT 20""",
+    ).fetchall()
+
+    conn.close()
+
+    return {
+        "agents": result,
+        "recent_executions": [dict(r) for r in recent],
+    }
+
+
+@app.get("/orchestrator/status")
+def orchestrator_status():
+    """Get current orchestrator loop status."""
+    engine = get_engine()
+    project = engine.projects.get_by_path()
+    if not project:
+        return {"status": "no_project"}
+
+    from opero.db.schema import get_connection
+    conn = get_connection(engine.project_path)
+
+    run = conn.execute(
+        "SELECT * FROM orchestrator_runs WHERE project_id = ? ORDER BY started_at DESC LIMIT 1",
+        (project.id,),
+    ).fetchone()
+
+    if not run:
+        conn.close()
+        return {"status": "no_runs"}
+
+    # Task progress
+    tasks = engine.tasks.list_tasks(project_id=project.id)
+    by_status = {}
+    for t in tasks:
+        by_status[t.status.value] = by_status.get(t.status.value, 0) + 1
+
+    verified = conn.execute(
+        "SELECT COUNT(*) FROM tasks WHERE project_id = ? AND verification_status = 'passed'",
+        (project.id,),
+    ).fetchone()[0]
+
+    failed_verification = conn.execute(
+        "SELECT COUNT(*) FROM tasks WHERE project_id = ? AND verification_status = 'failed'",
+        (project.id,),
+    ).fetchone()[0]
+
+    conn.close()
+
+    return {
+        "run": dict(run),
+        "progress": {
+            "total": len(tasks),
+            "todo": by_status.get("todo", 0),
+            "in_progress": by_status.get("in_progress", 0),
+            "done": by_status.get("done", 0),
+            "blocked": by_status.get("blocked", 0),
+            "verified": verified,
+            "failed_verification": failed_verification,
+        },
+    }
+
+
+@app.get("/orchestrator/runs")
+def orchestrator_runs(limit: int = 10):
+    """Get recent orchestrator runs."""
+    engine = get_engine()
+    from opero.db.schema import get_connection
+    conn = get_connection(engine.project_path)
+    rows = conn.execute(
+        "SELECT * FROM orchestrator_runs ORDER BY started_at DESC LIMIT ?", (limit,)
+    ).fetchall()
+    conn.close()
+    return {"runs": [dict(r) for r in rows]}
+
+
+@app.post("/orchestrator/pause")
+def pause_orchestrator(run_id: str):
+    """Pause a running orchestrator loop."""
+    engine = get_engine()
+    from opero.orchestrator.loop import OrchestratorLoop
+    OrchestratorLoop.pause(engine.project_path, run_id)
+    return {"status": "paused"}
+
+
+@app.post("/orchestrator/stop")
+def stop_orchestrator(run_id: str):
+    """Stop a running orchestrator loop."""
+    engine = get_engine()
+    from opero.orchestrator.loop import OrchestratorLoop
+    OrchestratorLoop.stop(engine.project_path, run_id)
+    return {"status": "stopped"}
+
+
 @app.post("/git/sync")
 def sync_git():
     engine = get_engine()

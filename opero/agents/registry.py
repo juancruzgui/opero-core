@@ -40,6 +40,18 @@ DEFAULT_AGENTS = [
         tools=["filesystem", "git", "shell", "debugger"],
         description="Debugging agent — diagnoses and fixes issues in code",
     ),
+    Agent(
+        name="pm_analyst",
+        capabilities=["analyze", "plan", "decompose", "review", "prioritize"],
+        tools=["filesystem", "web_search"],
+        description="PM/Spec Analyst — analyzes specs, creates feature/task trees, reviews completed work",
+    ),
+    Agent(
+        name="tester",
+        capabilities=["test", "verify", "playwright", "validate", "e2e"],
+        tools=["filesystem", "git", "shell", "browser"],
+        description="Tester — verifies completed tasks using Playwright and assertions against success_criteria",
+    ),
 ]
 
 
@@ -88,6 +100,8 @@ class AgentRegistry:
             "research": "researcher",
             "agent_task": "fullstack_dev",
             "setup": "backend_dev",
+            "test": "tester",
+            "review": "pm_analyst",
         }
         agent_name = type_to_agent.get(task.type.value, "fullstack_dev")
         return self.get(agent_name)

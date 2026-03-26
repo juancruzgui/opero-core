@@ -503,6 +503,107 @@ def cmd_claude(args):
         print(content)
 
 
+def cmd_loop(args):
+    """Run the autonomous development loop."""
+    engine = get_engine()
+    if not engine.is_initialized():
+        print("✦ Project not initialized. Run 'opero init' first.")
+        return
+
+    project = engine.projects.get_by_path()
+    if not project:
+        print("✦ No project found.")
+        return
+
+    action = args.loop_action
+
+    if action == "status":
+        from opero.orchestrator.loop import OrchestratorLoop
+        status = OrchestratorLoop.get_status(os.getcwd(), project.id)
+        if not status:
+            print("✦ No orchestrator runs found.")
+            return
+        print(f"✦ Orchestrator Run: {status['id']}")
+        print(f"  Status: {status['status']}")
+        print(f"  Phase: {status['phase']}")
+        print(f"  Iteration: {status['iteration']}")
+        print(f"  Started: {status['started_at']}")
+        if status['completed_at']:
+            print(f"  Completed: {status['completed_at']}")
+        return
+
+    if action == "pause":
+        from opero.orchestrator.loop import OrchestratorLoop
+        status = OrchestratorLoop.get_status(os.getcwd(), project.id)
+        if status and status['status'] == 'running':
+            OrchestratorLoop.pause(os.getcwd(), status['id'])
+            print(f"✦ Orchestrator paused: {status['id']}")
+        else:
+            print("✦ No running orchestrator to pause.")
+        return
+
+    if action == "stop":
+        from opero.orchestrator.loop import OrchestratorLoop
+        status = OrchestratorLoop.get_status(os.getcwd(), project.id)
+        if status and status['status'] in ('running', 'paused'):
+            OrchestratorLoop.stop(os.getcwd(), status['id'])
+            print(f"✦ Orchestrator stopped: {status['id']}")
+        else:
+            print("✦ No active orchestrator to stop.")
+        return
+
+    # Default: run the loop
+    spec_text = None
+    if args.spec_file:
+        from pathlib import Path
+        spec_path = Path(args.spec_file)
+        if not spec_path.exists():
+            print(f"✦ Spec file not found: {args.spec_file}")
+            return
+        spec_text = spec_path.read_text()
+    elif args.spec:
+        spec_text = args.spec
+
+    if not spec_text and action != "resume":
+        # Check if there are existing TODO tasks to work on
+        tasks = engine.tasks.list_tasks(project_id=project.id, status=TaskStatus.TODO)
+        if not tasks:
+            print("✦ No spec provided and no pending tasks.")
+            print("  Usage: opero loop --spec-file spec.md")
+            print("         opero loop --spec 'Build a todo app'")
+            return
+        print(f"✦ No spec — working on {len(tasks)} existing TODO tasks")
+
+    from opero.orchestrator.loop import OrchestratorLoop
+    loop = OrchestratorLoop(
+        project_path=os.getcwd(),
+        project_id=project.id,
+        spec_text=spec_text,
+        max_iterations=args.max_iterations or 3,
+        parallel_agents=args.parallel or 1,
+        skip_testing=args.skip_testing or False,
+    )
+    loop.run()
+
+
+def cmd_go(args):
+    """Launch interactive PM session."""
+    engine = get_engine()
+    if not engine.is_initialized():
+        print("✦ Project not initialized. Run 'opero init' first.")
+        return
+    project = engine.projects.get_by_path()
+    if not project:
+        print("✦ No project found.")
+        return
+    from opero.orchestrator.interactive import launch_interactive
+    launch_interactive(
+        os.getcwd(), project.id,
+        parallel=args.parallel or 1,
+        open_dashboard=not args.no_dashboard,
+    )
+
+
 def cmd_agents(args):
     """List registered agents."""
     engine = get_engine()
@@ -600,25 +701,55 @@ def main():
                                choices=["sync", "hooks", "mcp", "setup", "show"],
                                help="sync=update CLAUDE.md, hooks=install hooks, mcp=configure MCP, setup=all")
 
+    # go (interactive PM)
+    go_parser = subparsers.add_parser("go", help="Launch interactive PM session (conversational)")
+    go_parser.add_argument("--parallel", "-p", type=int, default=1, help="Parallel agents (default 1)")
+    go_parser.add_argument("--no-dashboard", action="store_true", help="Don't auto-start dashboard")
+
     # agents
     subparsers.add_parser("agents", help="List registered agents")
+
+    # loop (orchestrator)
+    loop_parser = subparsers.add_parser("loop", help="Run autonomous development loop")
+    loop_parser.add_argument("loop_action", nargs="?", choices=["status", "pause", "stop"],
+                             help="status=show state, pause=pause loop, stop=stop loop")
+    loop_parser.add_argument("--spec-file", "-f", help="Path to spec/PRD file")
+    loop_parser.add_argument("--spec", "-s", help="Spec text (inline)")
+    loop_parser.add_argument("--max-iterations", "-n", type=int, default=3, help="Max loop iterations (default 3)")
+    loop_parser.add_argument("--parallel", "-p", type=int, default=1, help="Parallel agents (default 1)")
+    loop_parser.add_argument("--skip-testing", action="store_true", help="Skip Playwright testing phase")
 
     args = parser.parse_args()
 
     if args.command is None:
-        # Running bare 'opero' — auto-init if needed, then show status
+        # Running bare 'opero' — launch interactive PM session
         engine = get_engine()
         project = None
         if engine.is_initialized():
             project = engine.projects.get_by_path()
 
         if not project:
-            # Not fully initialized — bootstrap everything
+            # Not fully initialized — bootstrap first
             args.name = None
             args.description = None
             cmd_init(args)
-        else:
-            cmd_status(args)
+            project = engine.projects.get_by_path()
+
+        if project:
+            # Check if claude CLI is available
+            import subprocess as _sp
+            try:
+                _sp.run(["claude", "--version"], capture_output=True, check=True, timeout=5)
+            except (FileNotFoundError, _sp.CalledProcessError, _sp.TimeoutExpired):
+                # No claude CLI — fall back to status display
+                print("✦ Claude Code CLI not found. Showing status instead.")
+                print("  Install Claude Code for the interactive experience.")
+                print()
+                cmd_status(args)
+                return
+
+            from opero.orchestrator.interactive import launch_interactive
+            launch_interactive(os.getcwd(), project.id)
         return
 
     commands = {
@@ -632,6 +763,8 @@ def main():
         "sync": cmd_sync,
         "serve": cmd_serve,
         "agents": cmd_agents,
+        "go": cmd_go,
+        "loop": cmd_loop,
     }
 
     handler = commands.get(args.command)
