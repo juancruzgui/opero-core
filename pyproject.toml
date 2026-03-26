@@ -8,9 +8,10 @@ version = "0.1.0"
 description = "The operating system for AI-driven software development"
 requires-python = ">=3.10"
 dependencies = [
-    "fastapi>=0.110.0",
-    "uvicorn[standard]>=0.27.0",
-    "pydantic>=2.0",
+    "fastapi==0.135.2",
+    "uvicorn[standard]==0.42.0",
+    "pydantic==2.12.5",
+    "starlette==1.0.0",
 ]
 
 [project.scripts]
