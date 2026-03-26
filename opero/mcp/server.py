@@ -239,6 +239,47 @@ def active_executions():
     return {"executions": [dict(r) for r in rows]}
 
 
+@app.get("/claude/activity")
+def claude_activity(limit: int = 50):
+    """Get recent Claude Code activity for the live feed."""
+    engine = get_engine()
+    from opero.db.schema import get_connection
+    conn = get_connection(engine.project_path)
+    rows = conn.execute(
+        "SELECT * FROM claude_activity ORDER BY created_at DESC LIMIT ?", (limit,)
+    ).fetchall()
+    conn.close()
+    return {"activity": [dict(r) for r in rows]}
+
+
+@app.get("/claude/sessions")
+def claude_sessions():
+    """Get Claude Code sessions — shows if Claude is actively working."""
+    engine = get_engine()
+    from opero.db.schema import get_connection
+    conn = get_connection(engine.project_path)
+    rows = conn.execute(
+        "SELECT * FROM claude_sessions ORDER BY started_at DESC LIMIT 10"
+    ).fetchall()
+    conn.close()
+
+    sessions = []
+    for r in rows:
+        d = dict(r)
+        # Mark sessions with no heartbeat in 30s as stale
+        if d["status"] == "active" and d.get("last_heartbeat"):
+            from datetime import datetime
+            try:
+                last = datetime.fromisoformat(d["last_heartbeat"])
+                age = (datetime.utcnow() - last).total_seconds()
+                if age > 30:
+                    d["status"] = "stale"
+            except (ValueError, TypeError):
+                pass
+        sessions.append(d)
+    return {"sessions": sessions}
+
+
 @app.get("/agents")
 def list_agents():
     engine = get_engine()

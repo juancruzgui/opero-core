@@ -291,32 +291,154 @@ class ClaudeCodeIntegration:
 
 
 # ---------------------------------------------------------------------------
-# Hook handlers — called by Claude Code hooks
+# Session + activity tracking
 # ---------------------------------------------------------------------------
 
-def handle_post_tool():
-    """After a tool call, sync CLAUDE.md if memory or tasks changed."""
+def _get_session_id() -> str:
+    """Get or create a session ID for this Claude Code session.
+
+    Uses an env var so all hook calls within the same Claude session
+    share one ID. Falls back to a file-based session.
+    """
+    sid = os.environ.get("OPERO_SESSION_ID")
+    if sid:
+        return sid
+
+    # Check for a session file (created on first hook call)
+    session_file = Path(os.getcwd()) / ".opero" / ".session"
+    if session_file.exists():
+        content = session_file.read_text().strip()
+        # Session is stale if file is older than 2 hours
+        age = datetime.utcnow().timestamp() - session_file.stat().st_mtime
+        if age < 7200 and content:
+            return content
+
+    # New session
+    import uuid
+    sid = uuid.uuid4().hex[:12]
+    session_file.parent.mkdir(parents=True, exist_ok=True)
+    session_file.write_text(sid)
+    return sid
+
+
+def _log_activity(tool_name: str, action: str = "", file_path: str = "", detail: str = ""):
+    """Log Claude Code tool activity to the database."""
     try:
+        from opero.db.schema import get_connection
+        cwd = os.getcwd()
+        conn = get_connection(cwd)
+
+        # Get project ID
+        row = conn.execute("SELECT id FROM projects WHERE path = ?", (cwd,)).fetchone()
+        project_id = row["id"] if row else None
+
+        session_id = _get_session_id()
+
+        # Get current task (if any in_progress)
+        task_id = None
+        if project_id:
+            task_row = conn.execute(
+                "SELECT id FROM tasks WHERE project_id = ? AND status = 'in_progress' LIMIT 1",
+                (project_id,),
+            ).fetchone()
+            task_id = task_row["id"] if task_row else None
+
+        conn.execute(
+            "INSERT INTO claude_activity (project_id, session_id, tool_name, action, file_path, task_id, detail) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (project_id, session_id, tool_name, action, file_path, task_id, detail),
+        )
+
+        # Upsert session
+        conn.execute(
+            """INSERT INTO claude_sessions (id, project_id, status, current_task_id, last_heartbeat, started_at)
+               VALUES (?, ?, 'active', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+               ON CONFLICT(id) DO UPDATE SET last_heartbeat = CURRENT_TIMESTAMP, current_task_id = ?, status = 'active'""",
+            (session_id, project_id, task_id, task_id),
+        )
+
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
+
+
+# ---------------------------------------------------------------------------
+# Hook handlers — called by Claude Code hooks via stdin JSON
+# ---------------------------------------------------------------------------
+
+def _parse_hook_input() -> dict:
+    """Parse the JSON that Claude Code sends to hook stdin."""
+    import sys
+    try:
+        data = sys.stdin.read()
+        if data:
+            return json.loads(data)
+    except Exception:
+        pass
+    return {}
+
+
+def handle_post_tool(hook_input: dict = None):
+    """After a tool call, log activity and refresh CLAUDE.md if stale."""
+    try:
+        if hook_input is None:
+            hook_input = _parse_hook_input()
+
+        tool_name = hook_input.get("tool_name", "unknown")
+        tool_input = hook_input.get("tool_input", {})
+
+        # Extract useful info from the tool call
+        action = ""
+        file_path = ""
+        detail = ""
+
+        if tool_name == "Edit":
+            file_path = tool_input.get("file_path", "")
+            action = "edit"
+            detail = f"Edited {Path(file_path).name}" if file_path else ""
+        elif tool_name == "Write":
+            file_path = tool_input.get("file_path", "")
+            action = "write"
+            detail = f"Wrote {Path(file_path).name}" if file_path else ""
+        elif tool_name == "Bash":
+            cmd = tool_input.get("command", "")
+            action = "bash"
+            detail = cmd[:100] if cmd else ""
+        elif tool_name == "Read":
+            file_path = tool_input.get("file_path", "")
+            action = "read"
+            detail = f"Read {Path(file_path).name}" if file_path else ""
+        else:
+            action = tool_name.lower()
+
+        # Log the activity
+        _log_activity(tool_name, action, file_path, detail)
+
+        # Refresh CLAUDE.md if stale (every 60s)
         engine = OperoEngine(os.getcwd())
         if not engine.is_initialized():
             return
 
-        # Check if CLAUDE.md is stale (older than 60 seconds)
         claude_md = Path(os.getcwd()) / "CLAUDE.md"
         if claude_md.exists():
             age = datetime.utcnow().timestamp() - claude_md.stat().st_mtime
             if age < 60:
-                return  # Recent enough, skip
-
+                return
         integration = ClaudeCodeIntegration(os.getcwd())
         integration.write_claude_md()
     except Exception:
-        pass  # Hooks must not fail
+        pass
 
 
-def handle_pre_tool():
-    """Before a Bash tool call, ensure CLAUDE.md exists."""
+def handle_pre_tool(hook_input: dict = None):
+    """Before a tool call, ensure CLAUDE.md exists and log session start."""
     try:
+        if hook_input is None:
+            hook_input = _parse_hook_input()
+
+        # Ensure session is tracked
+        _log_activity("session", "heartbeat")
+
         claude_md = Path(os.getcwd()) / "CLAUDE.md"
         if not claude_md.exists():
             engine = OperoEngine(os.getcwd())
@@ -327,14 +449,33 @@ def handle_pre_tool():
         pass
 
 
-def handle_on_stop():
-    """When Claude stops, sync git and refresh CLAUDE.md."""
+def handle_on_stop(hook_input: dict = None):
+    """When Claude stops, mark session ended, sync git, refresh CLAUDE.md."""
     try:
-        engine = OperoEngine(os.getcwd())
+        # Mark session as stopped
+        from opero.db.schema import get_connection
+        cwd = os.getcwd()
+        session_id = _get_session_id()
+        conn = get_connection(cwd)
+        conn.execute(
+            "UPDATE claude_sessions SET status = 'stopped', stopped_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (session_id,),
+        )
+        conn.commit()
+        conn.close()
+
+        _log_activity("session", "stop", detail="Claude session ended")
+
+        # Clean up session file
+        session_file = Path(cwd) / ".opero" / ".session"
+        if session_file.exists():
+            session_file.unlink()
+
+        engine = OperoEngine(cwd)
         if not engine.is_initialized():
             return
         engine.sync()
-        integration = ClaudeCodeIntegration(os.getcwd())
+        integration = ClaudeCodeIntegration(cwd)
         integration.write_claude_md()
     except Exception:
         pass
@@ -342,13 +483,16 @@ def handle_on_stop():
 
 if __name__ == "__main__":
     import sys
+
+    hook_input = _parse_hook_input()
+
     args = sys.argv[1:]
     if "--hook" in args:
         idx = args.index("--hook")
         hook_type = args[idx + 1] if idx + 1 < len(args) else ""
         if hook_type == "post-tool":
-            handle_post_tool()
+            handle_post_tool(hook_input)
         elif hook_type == "pre-tool":
-            handle_pre_tool()
+            handle_pre_tool(hook_input)
         elif hook_type == "on-stop":
-            handle_on_stop()
+            handle_on_stop(hook_input)

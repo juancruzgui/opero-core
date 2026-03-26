@@ -29,58 +29,94 @@ body {
   font-family: var(--font);
   font-size: 13px;
   line-height: 1.5;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
 }
 
+/* Header */
 .header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 24px;
+  padding: 12px 20px;
   border-bottom: 1px solid var(--border);
   background: var(--surface);
+  flex-shrink: 0;
 }
 
-.header h1 {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--accent);
-}
-
-.header .project-name {
-  color: var(--text2);
-  font-size: 13px;
-}
+.header h1 { font-size: 15px; font-weight: 600; color: var(--accent); }
+.header .project-name { color: var(--text2); font-size: 12px; }
 
 .header .status-bar {
   display: flex;
   gap: 16px;
   align-items: center;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text2);
 }
 
-.header .dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--done);
-  display: inline-block;
+.claude-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
 }
 
+.claude-status.active {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.claude-status.inactive {
+  background: var(--surface2);
+  color: var(--text2);
+  border: 1px solid var(--border);
+}
+
+.pulse-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #22c55e;
+  animation: pulse 1.5s infinite;
+}
+
+.pulse-dot.off { background: var(--text2); animation: none; }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); }
+  50% { opacity: 0.7; box-shadow: 0 0 0 4px rgba(34, 197, 94, 0); }
+}
+
+/* Layout */
+.main {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* Tabs */
 .tabs {
   display: flex;
   gap: 0;
   border-bottom: 1px solid var(--border);
   background: var(--surface);
-  padding: 0 24px;
+  padding: 0 20px;
+  flex-shrink: 0;
 }
 
 .tab {
-  padding: 10px 20px;
+  padding: 8px 16px;
   cursor: pointer;
   color: var(--text2);
   border-bottom: 2px solid transparent;
-  font-size: 13px;
+  font-size: 12px;
   transition: all 0.15s;
 }
 
@@ -88,12 +124,14 @@ body {
 .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 
 /* Kanban */
+.kanban-container { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
 .kanban {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
-  padding: 20px 24px;
-  height: calc(100vh - 140px);
+  gap: 12px;
+  padding: 14px 20px;
+  flex: 1;
   overflow: hidden;
 }
 
@@ -107,160 +145,172 @@ body {
 }
 
 .column-header {
-  padding: 12px 16px;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
   justify-content: space-between;
   font-weight: 600;
-  font-size: 12px;
+  font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .column-header .count {
   background: var(--surface2);
-  padding: 2px 8px;
+  padding: 1px 7px;
   border-radius: 10px;
-  font-size: 11px;
-  color: var(--text2);
-}
-
-.column-body {
-  padding: 8px;
-  overflow-y: auto;
-  flex: 1;
-}
-
-.card {
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 12px;
-  margin-bottom: 8px;
-  cursor: default;
-  transition: border-color 0.15s;
-}
-
-.card:hover { border-color: var(--accent); }
-
-.card .card-id {
   font-size: 10px;
   color: var(--text2);
-  margin-bottom: 4px;
-  font-family: var(--font);
 }
 
-.card .card-title {
-  font-size: 13px;
-  font-weight: 500;
-  margin-bottom: 6px;
-}
-
-.card .card-meta {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-.badge {
-  font-size: 10px;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-weight: 500;
-}
-
-.badge-type {
-  background: var(--accent2);
-  color: white;
-}
-
-.badge-priority {
-  background: var(--surface);
-  color: var(--text2);
-  border: 1px solid var(--border);
-}
-
-.badge-agent {
-  background: #1e3a5f;
-  color: #60a5fa;
-}
-
-.badge-priority.p1 { color: #ef4444; border-color: #ef4444; }
-.badge-priority.p2 { color: #f97316; border-color: #f97316; }
+.column-body { padding: 6px; overflow-y: auto; flex: 1; }
 
 .col-todo .column-header { border-left: 3px solid var(--todo); }
 .col-progress .column-header { border-left: 3px solid var(--progress); }
 .col-done .column-header { border-left: 3px solid var(--done); }
 .col-blocked .column-header { border-left: 3px solid var(--blocked); }
 
+/* Task card */
+.card {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px;
+  margin-bottom: 6px;
+  transition: border-color 0.15s;
+}
+
+.card:hover { border-color: var(--accent); }
+.card .card-id { font-size: 9px; color: var(--text2); margin-bottom: 3px; }
+.card .card-title { font-size: 12px; font-weight: 500; margin-bottom: 5px; }
+.card .card-meta { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; }
+
+.badge {
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-weight: 500;
+}
+
+.badge-type { background: var(--accent2); color: white; }
+.badge-agent { background: #1e3a5f; color: #60a5fa; }
+.badge-priority { background: var(--surface); color: var(--text2); border: 1px solid var(--border); }
+.badge-priority.p1 { color: #ef4444; border-color: #ef4444; }
+.badge-priority.p2 { color: #f97316; border-color: #f97316; }
+
+/* Live activity sidebar */
+.activity-sidebar {
+  width: 320px;
+  border-left: 1px solid var(--border);
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.sidebar-header {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text2);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.sidebar-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 0;
+}
+
+.activity-item {
+  padding: 6px 14px;
+  font-size: 11px;
+  border-bottom: 1px solid rgba(42, 42, 46, 0.5);
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.activity-item.fresh {
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { background: rgba(139, 92, 246, 0.1); }
+  to { background: transparent; }
+}
+
+.activity-item .act-time {
+  color: var(--text2);
+  font-size: 10px;
+  min-width: 50px;
+  flex-shrink: 0;
+}
+
+.activity-item .act-icon {
+  font-size: 12px;
+  min-width: 16px;
+  text-align: center;
+}
+
+.activity-item .act-detail {
+  color: var(--text2);
+  word-break: break-all;
+  flex: 1;
+}
+
+.activity-item .act-detail strong { color: var(--text); font-weight: 500; }
+
 /* Agents panel */
 .agents-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 16px;
-  padding: 20px 24px;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+  padding: 14px 20px;
 }
 
 .agent-card {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 16px;
+  padding: 14px;
 }
 
-.agent-card .agent-name {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--accent);
-  margin-bottom: 4px;
-}
+.agent-card .agent-name { font-size: 13px; font-weight: 600; color: var(--accent); margin-bottom: 3px; }
+.agent-card .agent-desc { font-size: 11px; color: var(--text2); margin-bottom: 8px; }
+.agent-card .agent-caps { display: flex; flex-wrap: wrap; gap: 3px; }
 
-.agent-card .agent-desc {
-  font-size: 12px;
-  color: var(--text2);
-  margin-bottom: 10px;
-}
-
-.agent-card .agent-caps {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.agent-card .agent-status {
+.agent-card .agent-activity {
   margin-top: 10px;
-  padding-top: 10px;
+  padding-top: 8px;
   border-top: 1px solid var(--border);
-  font-size: 11px;
+  font-size: 10px;
   color: var(--text2);
 }
 
-.agent-card .agent-status.active {
-  color: var(--done);
-}
+.agent-card .agent-activity.working { color: var(--done); }
 
 /* Memory panel */
-.memory-panel {
-  padding: 20px 24px;
-}
+.memory-panel { padding: 14px 20px; overflow-y: auto; flex: 1; }
 
-.search-bar {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 16px;
-}
+.search-bar { display: flex; gap: 8px; margin-bottom: 12px; }
 
 .search-bar input {
   flex: 1;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 6px;
-  padding: 8px 12px;
+  padding: 7px 10px;
   color: var(--text);
   font-family: var(--font);
-  font-size: 13px;
+  font-size: 12px;
   outline: none;
 }
 
@@ -271,109 +321,39 @@ body {
   color: white;
   border: none;
   border-radius: 6px;
-  padding: 8px 16px;
+  padding: 7px 14px;
   cursor: pointer;
   font-family: var(--font);
-  font-size: 13px;
+  font-size: 12px;
 }
 
-.search-bar button:hover { background: var(--accent); }
-
-.memory-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
+.memory-list { display: flex; flex-direction: column; gap: 6px; }
 
 .memory-item {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 6px;
-  padding: 12px 16px;
+  padding: 10px 14px;
 }
 
-.memory-item .mem-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 4px;
-}
-
-.memory-item .mem-title {
-  font-weight: 500;
-  font-size: 13px;
-}
-
-.memory-item .mem-content {
-  font-size: 12px;
-  color: var(--text2);
-  margin-top: 4px;
-}
-
-.memory-item .mem-tags {
-  display: flex;
-  gap: 4px;
-  margin-top: 8px;
-}
+.memory-item .mem-header { display: flex; justify-content: space-between; align-items: center; }
+.memory-item .mem-title { font-weight: 500; font-size: 12px; }
+.memory-item .mem-content { font-size: 11px; color: var(--text2); margin-top: 3px; }
+.memory-item .mem-tags { display: flex; gap: 3px; margin-top: 6px; }
 
 .tag {
-  font-size: 10px;
-  padding: 1px 6px;
+  font-size: 9px;
+  padding: 1px 5px;
   border-radius: 3px;
   background: var(--surface2);
   color: var(--text2);
   border: 1px solid var(--border);
 }
 
-/* Activity feed */
-.activity-panel {
-  padding: 20px 24px;
-  max-width: 800px;
-}
+.panel { display: none; flex: 1; overflow: hidden; }
+.panel.active { display: flex; flex-direction: column; }
 
-.activity-item {
-  display: flex;
-  gap: 12px;
-  padding: 10px 0;
-  border-bottom: 1px solid var(--border);
-  font-size: 12px;
-}
-
-.activity-item .time {
-  color: var(--text2);
-  min-width: 140px;
-  flex-shrink: 0;
-}
-
-.activity-item .event-type {
-  font-weight: 600;
-  min-width: 100px;
-}
-
-.activity-item .detail { color: var(--text2); }
-
-.panel { display: none; }
-.panel.active { display: block; }
-
-.empty-state {
-  text-align: center;
-  padding: 60px 20px;
-  color: var(--text2);
-}
-
-/* Refresh indicator */
-.refresh-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--done);
-  animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.3; }
-}
+.empty-state { text-align: center; padding: 40px 20px; color: var(--text2); font-size: 12px; }
 </style>
 </head>
 <body>
@@ -386,7 +366,10 @@ body {
   <div class="status-bar">
     <span id="gitBranch">—</span>
     <span id="taskSummary">—</span>
-    <div class="refresh-dot" title="Auto-refreshing every 3s"></div>
+    <div class="claude-status inactive" id="claudeStatus">
+      <div class="pulse-dot off" id="claudeDot"></div>
+      <span id="claudeLabel">Claude idle</span>
+    </div>
   </div>
 </div>
 
@@ -394,114 +377,127 @@ body {
   <div class="tab active" data-panel="kanban">Board</div>
   <div class="tab" data-panel="agents">Agents</div>
   <div class="tab" data-panel="memory">Memory</div>
-  <div class="tab" data-panel="activity">Activity</div>
 </div>
 
-<div id="kanban" class="panel active">
-  <div class="kanban">
-    <div class="column col-todo">
-      <div class="column-header">Todo <span class="count" id="countTodo">0</span></div>
-      <div class="column-body" id="colTodo"></div>
-    </div>
-    <div class="column col-progress">
-      <div class="column-header">In Progress <span class="count" id="countProgress">0</span></div>
-      <div class="column-body" id="colProgress"></div>
-    </div>
-    <div class="column col-done">
-      <div class="column-header">Done <span class="count" id="countDone">0</span></div>
-      <div class="column-body" id="colDone"></div>
-    </div>
-    <div class="column col-blocked">
-      <div class="column-header">Blocked <span class="count" id="countBlocked">0</span></div>
-      <div class="column-body" id="colBlocked"></div>
+<div class="main">
+  <!-- Board -->
+  <div id="kanban" class="panel active">
+    <div class="kanban">
+      <div class="column col-todo">
+        <div class="column-header">Todo <span class="count" id="countTodo">0</span></div>
+        <div class="column-body" id="colTodo"></div>
+      </div>
+      <div class="column col-progress">
+        <div class="column-header">In Progress <span class="count" id="countProgress">0</span></div>
+        <div class="column-body" id="colProgress"></div>
+      </div>
+      <div class="column col-done">
+        <div class="column-header">Done <span class="count" id="countDone">0</span></div>
+        <div class="column-body" id="colDone"></div>
+      </div>
+      <div class="column col-blocked">
+        <div class="column-header">Blocked <span class="count" id="countBlocked">0</span></div>
+        <div class="column-body" id="colBlocked"></div>
+      </div>
     </div>
   </div>
-</div>
 
-<div id="agents" class="panel">
-  <div class="agents-grid" id="agentsGrid"></div>
-</div>
-
-<div id="memory" class="panel">
-  <div class="memory-panel">
-    <div class="search-bar">
-      <input type="text" id="memorySearch" placeholder="Search memory (semantic)..." />
-      <button onclick="searchMemory()">Search</button>
-    </div>
-    <div class="memory-list" id="memoryList"></div>
+  <!-- Agents -->
+  <div id="agents" class="panel">
+    <div class="agents-grid" id="agentsGrid"></div>
   </div>
-</div>
 
-<div id="activity" class="panel">
-  <div class="activity-panel" id="activityFeed"></div>
+  <!-- Memory -->
+  <div id="memory" class="panel">
+    <div class="memory-panel">
+      <div class="search-bar">
+        <input type="text" id="memorySearch" placeholder="Search memory (semantic)..." />
+        <button onclick="searchMemory()">Search</button>
+      </div>
+      <div class="memory-list" id="memoryList"></div>
+    </div>
+  </div>
+
+  <!-- Live Activity Sidebar -->
+  <div class="activity-sidebar">
+    <div class="sidebar-header">
+      <span>Live Activity</span>
+      <span id="activityCount" style="color:var(--text2)">—</span>
+    </div>
+    <div class="sidebar-body" id="activityFeed"></div>
+  </div>
 </div>
 
 <script>
 const API = '';
 let projectId = null;
-let activeExecutions = {};
+let lastActivityId = 0;
 
-// --- Tabs ---
+// Tabs
 document.querySelectorAll('.tab').forEach(tab => {
   tab.addEventListener('click', () => {
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
     tab.classList.add('active');
     document.getElementById(tab.dataset.panel).classList.add('active');
+    if (tab.dataset.panel === 'agents') loadAgents();
+    if (tab.dataset.panel === 'memory') loadMemory();
   });
 });
 
-// --- API helpers ---
-async function get(url) {
-  const r = await fetch(API + url);
-  return r.json();
-}
-
+// Helpers
+async function get(url) { return (await fetch(API + url)).json(); }
 async function post(url, body) {
-  const r = await fetch(API + url, {
+  return (await fetch(API + url, {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify(body),
-  });
-  return r.json();
+  })).json();
 }
 
-// --- Render helpers ---
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+function timeAgo(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr + (dateStr.includes('Z') ? '' : 'Z'));
+  const s = Math.floor((Date.now() - d.getTime()) / 1000);
+  if (s < 5) return 'now';
+  if (s < 60) return s + 's';
+  if (s < 3600) return Math.floor(s/60) + 'm';
+  return Math.floor(s/3600) + 'h';
+}
+
+function toolIcon(name) {
+  const icons = {
+    'Edit': '✏️', 'Write': '📝', 'Bash': '⚡', 'Read': '📖',
+    'Grep': '🔍', 'Glob': '📁', 'session': '🔵',
+  };
+  return icons[name] || '🔧';
+}
+
+// Task card
 function renderCard(task) {
-  const priorityClass = task.priority <= 2 ? ` p${task.priority}` : '';
-  const agent = task.assigned_agent
-    ? `<span class="badge badge-agent">${task.assigned_agent}</span>` : '';
-
-  return `
-    <div class="card">
-      <div class="card-id">${task.id}</div>
-      <div class="card-title">${escHtml(task.title)}</div>
-      <div class="card-meta">
-        <span class="badge badge-type">${task.type}</span>
-        <span class="badge badge-priority${priorityClass}">P${task.priority}</span>
-        ${agent}
-      </div>
+  const pc = task.priority <= 2 ? ` p${task.priority}` : '';
+  const agent = task.assigned_agent ? `<span class="badge badge-agent">${task.assigned_agent}</span>` : '';
+  return `<div class="card">
+    <div class="card-id">${task.id}</div>
+    <div class="card-title">${esc(task.title)}</div>
+    <div class="card-meta">
+      <span class="badge badge-type">${task.type}</span>
+      <span class="badge badge-priority${pc}">P${task.priority}</span>
+      ${agent}
     </div>
-  `;
+  </div>`;
 }
 
-function escHtml(s) {
-  const d = document.createElement('div');
-  d.textContent = s;
-  return d.innerHTML;
-}
-
-// --- Load data ---
+// Load functions
 async function loadStatus() {
   try {
     const data = await get('/project/status');
     if (!data.initialized) return;
-
     projectId = data.project.id;
-    document.getElementById('projectName').textContent =
-      `${data.project.name} (${data.project.id})`;
-    document.getElementById('gitBranch').textContent =
-      `${data.git.branch}${data.git.has_changes ? ' *' : ''}`;
+    document.getElementById('projectName').textContent = `${data.project.name} (${data.project.id})`;
+    document.getElementById('gitBranch').textContent = `${data.git.branch}${data.git.has_changes ? ' *' : ''}`;
     document.getElementById('taskSummary').textContent =
       `${data.tasks.todo}T ${data.tasks.in_progress}P ${data.tasks.done}D ${data.tasks.blocked}B`;
   } catch(e) {}
@@ -511,57 +507,116 @@ async function loadTasks() {
   try {
     const data = await get('/tasks' + (projectId ? `?project_id=${projectId}` : ''));
     const tasks = data.tasks || [];
+    const b = { todo: [], in_progress: [], done: [], blocked: [] };
+    tasks.forEach(t => { if (b[t.status]) b[t.status].push(t); });
 
-    const buckets = { todo: [], in_progress: [], done: [], blocked: [] };
-    tasks.forEach(t => {
-      if (buckets[t.status]) buckets[t.status].push(t);
-    });
+    document.getElementById('colTodo').innerHTML = b.todo.map(renderCard).join('');
+    document.getElementById('colProgress').innerHTML = b.in_progress.map(renderCard).join('');
+    document.getElementById('colDone').innerHTML = b.done.map(renderCard).join('');
+    document.getElementById('colBlocked').innerHTML = b.blocked.map(renderCard).join('');
 
-    document.getElementById('colTodo').innerHTML = buckets.todo.map(renderCard).join('');
-    document.getElementById('colProgress').innerHTML = buckets.in_progress.map(renderCard).join('');
-    document.getElementById('colDone').innerHTML = buckets.done.map(renderCard).join('');
-    document.getElementById('colBlocked').innerHTML = buckets.blocked.map(renderCard).join('');
+    document.getElementById('countTodo').textContent = b.todo.length;
+    document.getElementById('countProgress').textContent = b.in_progress.length;
+    document.getElementById('countDone').textContent = b.done.length;
+    document.getElementById('countBlocked').textContent = b.blocked.length;
+  } catch(e) {}
+}
 
-    document.getElementById('countTodo').textContent = buckets.todo.length;
-    document.getElementById('countProgress').textContent = buckets.in_progress.length;
-    document.getElementById('countDone').textContent = buckets.done.length;
-    document.getElementById('countBlocked').textContent = buckets.blocked.length;
+async function loadClaudeStatus() {
+  try {
+    const data = await get('/claude/sessions');
+    const sessions = data.sessions || [];
+    const active = sessions.find(s => s.status === 'active');
+
+    const el = document.getElementById('claudeStatus');
+    const dot = document.getElementById('claudeDot');
+    const label = document.getElementById('claudeLabel');
+
+    if (active) {
+      el.className = 'claude-status active';
+      dot.className = 'pulse-dot';
+      const taskInfo = active.current_task_id ? ` on ${active.current_task_id}` : '';
+      label.textContent = `Claude working${taskInfo}`;
+    } else {
+      el.className = 'claude-status inactive';
+      dot.className = 'pulse-dot off';
+      label.textContent = 'Claude idle';
+    }
+  } catch(e) {}
+}
+
+async function loadActivity() {
+  try {
+    const data = await get('/claude/activity?limit=100');
+    const items = data.activity || [];
+    const feed = document.getElementById('activityFeed');
+
+    if (items.length === 0) {
+      feed.innerHTML = '<div class="empty-state">No activity yet.<br>Start Claude Code in this project.</div>';
+      document.getElementById('activityCount').textContent = '—';
+      return;
+    }
+
+    // Check for new items
+    const newMaxId = Math.max(...items.map(i => i.id || 0));
+    const hasNew = newMaxId > lastActivityId && lastActivityId > 0;
+
+    document.getElementById('activityCount').textContent = items.length + ' events';
+
+    feed.innerHTML = items.map((item, idx) => {
+      const isNew = item.id > lastActivityId && lastActivityId > 0;
+      const icon = toolIcon(item.tool_name);
+      let detail = '';
+
+      if (item.action === 'edit' || item.action === 'write' || item.action === 'read') {
+        const fname = item.file_path ? item.file_path.split('/').pop() : '';
+        detail = `<strong>${item.action}</strong> ${esc(fname)}`;
+      } else if (item.action === 'bash') {
+        const cmd = (item.detail || '').slice(0, 80);
+        detail = `<strong>$</strong> <code>${esc(cmd)}</code>`;
+      } else if (item.action === 'heartbeat') {
+        detail = '<em>session active</em>';
+      } else if (item.action === 'stop') {
+        detail = '<strong>session ended</strong>';
+      } else {
+        detail = `<strong>${esc(item.tool_name)}</strong> ${esc(item.detail || '')}`;
+      }
+
+      const taskBadge = item.task_id ? ` <span class="badge badge-agent">${item.task_id}</span>` : '';
+
+      return `<div class="activity-item${isNew ? ' fresh' : ''}">
+        <span class="act-time">${timeAgo(item.created_at)}</span>
+        <span class="act-icon">${icon}</span>
+        <span class="act-detail">${detail}${taskBadge}</span>
+      </div>`;
+    }).join('');
+
+    lastActivityId = newMaxId;
   } catch(e) {}
 }
 
 async function loadAgents() {
   try {
-    const data = await get('/agents');
-    const agents = data.agents || [];
+    const [agentData, actData] = await Promise.all([get('/agents'), get('/claude/activity?limit=20')]);
+    const agents = agentData.agents || [];
+    const activity = actData.activity || [];
 
-    // Get active executions
-    let executions = [];
-    try {
-      const execData = await get('/executions/active');
-      executions = execData.executions || [];
-    } catch(e) {}
-
-    const activeAgents = new Set(executions.map(e => e.agent_name));
+    // Count recent activity per tool type to infer agent activity
+    const recentEdits = activity.filter(a => ['edit','write'].includes(a.action) && a.created_at);
 
     document.getElementById('agentsGrid').innerHTML = agents.map(a => {
       const caps = JSON.parse(a.capabilities || '[]');
-      const isActive = activeAgents.has(a.name);
-      const activeExec = executions.find(e => e.agent_name === a.name);
 
-      return `
-        <div class="agent-card">
-          <div class="agent-name">${a.name}</div>
-          <div class="agent-desc">${escHtml(a.description || '')}</div>
-          <div class="agent-caps">
-            ${caps.map(c => `<span class="badge badge-type">${c}</span>`).join('')}
-          </div>
-          <div class="agent-status ${isActive ? 'active' : ''}">
-            ${isActive
-              ? `● Working on: ${activeExec ? activeExec.task_id : 'task'}`
-              : '○ Idle'}
-          </div>
+      // Check if any task is assigned to this agent and in_progress
+      const isWorking = false; // Will be set by task check below
+
+      return `<div class="agent-card">
+        <div class="agent-name">${a.name}</div>
+        <div class="agent-desc">${esc(a.description || '')}</div>
+        <div class="agent-caps">
+          ${caps.map(c => `<span class="badge badge-type">${c}</span>`).join('')}
         </div>
-      `;
+      </div>`;
     }).join('');
   } catch(e) {}
 }
@@ -570,8 +625,7 @@ async function loadMemory() {
   if (!projectId) return;
   try {
     const data = await get(`/memory/list/${projectId}`);
-    const memories = data.memories || [];
-    renderMemoryList(memories);
+    renderMemoryList(data.memories || []);
   } catch(e) {}
 }
 
@@ -580,81 +634,38 @@ function renderMemoryList(memories) {
     ? '<div class="empty-state">No memories stored yet</div>'
     : memories.map(m => {
         const tags = JSON.parse(m.tags || '[]');
-        return `
-          <div class="memory-item">
-            <div class="mem-header">
-              <span class="mem-title">${escHtml(m.title)}</span>
-              <div>
-                <span class="badge badge-type">${m.type}</span>
-                <span class="badge badge-priority p${m.importance}">P${m.importance}</span>
-              </div>
+        return `<div class="memory-item">
+          <div class="mem-header">
+            <span class="mem-title">${esc(m.title)}</span>
+            <div>
+              <span class="badge badge-type">${m.type}</span>
+              <span class="badge badge-priority p${m.importance}">P${m.importance}</span>
             </div>
-            <div class="mem-content">${escHtml((m.content || '').slice(0, 300))}</div>
-            ${tags.length ? `<div class="mem-tags">${tags.map(t =>
-              `<span class="tag">${escHtml(t)}</span>`).join('')}</div>` : ''}
           </div>
-        `;
+          <div class="mem-content">${esc((m.content || '').slice(0, 200))}</div>
+          ${tags.length ? `<div class="mem-tags">${tags.map(t => `<span class="tag">${esc(t)}</span>`).join('')}</div>` : ''}
+        </div>`;
       }).join('');
 }
 
 async function searchMemory() {
-  const query = document.getElementById('memorySearch').value.trim();
-  if (!query || !projectId) return;
-  try {
-    const data = await post('/memory/search', { project_id: projectId, query, top_k: 20 });
-    const results = (data.results || []).map(r => ({...r.memory, _score: r.score}));
-    renderMemoryList(results);
-  } catch(e) {}
+  const q = document.getElementById('memorySearch').value.trim();
+  if (!q || !projectId) return;
+  const data = await post('/memory/search', { project_id: projectId, query: q, top_k: 20 });
+  renderMemoryList((data.results || []).map(r => r.memory));
 }
 
 document.getElementById('memorySearch').addEventListener('keydown', e => {
   if (e.key === 'Enter') searchMemory();
 });
 
-async function loadActivity() {
-  try {
-    const commits = await get('/git/log?count=20');
-    const feed = document.getElementById('activityFeed');
-
-    if (!commits.commits || commits.commits.length === 0) {
-      feed.innerHTML = '<div class="empty-state">No git activity yet</div>';
-      return;
-    }
-
-    feed.innerHTML = commits.commits.map(c => `
-      <div class="activity-item">
-        <span class="time">${c.date ? new Date(c.date).toLocaleString() : '—'}</span>
-        <span class="event-type">commit</span>
-        <span class="detail">
-          <code>${c.sha.slice(0,8)}</code> ${escHtml(c.message)} — ${escHtml(c.author)}
-        </span>
-      </div>
-    `).join('');
-  } catch(e) {}
-}
-
-// --- Init + auto-refresh ---
+// Refresh loop
 async function refresh() {
-  await loadStatus();
-  await loadTasks();
-
-  const activeTab = document.querySelector('.tab.active')?.dataset.panel;
-  if (activeTab === 'agents') await loadAgents();
-  if (activeTab === 'memory') await loadMemory();
-  if (activeTab === 'activity') await loadActivity();
+  await Promise.all([loadStatus(), loadTasks(), loadClaudeStatus(), loadActivity()]);
 }
-
-// Load agents/memory/activity on tab switch
-document.querySelectorAll('.tab').forEach(tab => {
-  tab.addEventListener('click', async () => {
-    if (tab.dataset.panel === 'agents') await loadAgents();
-    if (tab.dataset.panel === 'memory') await loadMemory();
-    if (tab.dataset.panel === 'activity') await loadActivity();
-  });
-});
 
 refresh();
-setInterval(refresh, 3000);
+setInterval(refresh, 2000);
 </script>
 </body>
 </html>

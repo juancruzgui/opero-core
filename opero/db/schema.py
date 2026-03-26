@@ -132,6 +132,28 @@ CREATE TABLE IF NOT EXISTS events (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (project_id) REFERENCES projects(id)
 );
+
+CREATE TABLE IF NOT EXISTS claude_activity (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id TEXT,
+    session_id TEXT,
+    tool_name TEXT NOT NULL,
+    action TEXT,
+    file_path TEXT,
+    task_id TEXT,
+    detail TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS claude_sessions (
+    id TEXT PRIMARY KEY,
+    project_id TEXT,
+    status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'stopped')),
+    current_task_id TEXT,
+    last_heartbeat TIMESTAMP,
+    started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    stopped_at TIMESTAMP
+);
 """
 
 
