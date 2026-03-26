@@ -542,7 +542,7 @@ def set_memory(req: SetMemoryRequest):
     return {"status": "ok"}
 
 
-@app.get("/memory/{project_id}/{key}")
+@app.get("/memory/kv/{project_id}/{key}")
 def get_memory(project_id: str, key: str):
     engine = get_engine()
     value = engine.projects.get_memory(project_id, key)
