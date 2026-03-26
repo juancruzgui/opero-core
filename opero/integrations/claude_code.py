@@ -269,6 +269,9 @@ class ClaudeCodeIntegration:
                     "env": {
                         "OPERO_PROJECT_PATH": self.project_path
                     }
+                },
+                "supabase": {
+                    "url": "http://127.0.0.1:54321/mcp"
                 }
             }
         }
@@ -288,6 +291,16 @@ class ClaudeCodeIntegration:
 
         hooks = self.get_hooks_config()
         existing.update(hooks)
+
+        # Add Supabase MCP permissions (allow all supabase tools)
+        allows = existing.get("allowedTools", [])
+        supabase_tools = [
+            "mcp__supabase__*",
+        ]
+        for tool in supabase_tools:
+            if tool not in allows:
+                allows.append(tool)
+        existing["allowedTools"] = allows
 
         settings_path.write_text(json.dumps(existing, indent=2) + "\n")
         return settings_path

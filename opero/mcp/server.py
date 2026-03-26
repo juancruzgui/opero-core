@@ -706,6 +706,44 @@ def stop_orchestrator(run_id: str):
     return {"status": "stopped"}
 
 
+## --- Services ---
+
+@app.get("/services")
+def services_status():
+    """Get status of all project services (frontend, backend, database)."""
+    engine = get_engine()
+    from opero.services.manager import ServiceManager
+    mgr = ServiceManager(engine.project_path)
+    return {"services": mgr.status_all()}
+
+
+@app.post("/services/{service}/start")
+def start_service(service: str):
+    """Start a project service."""
+    engine = get_engine()
+    from opero.services.manager import ServiceManager
+    mgr = ServiceManager(engine.project_path)
+    return mgr.start(service)
+
+
+@app.post("/services/{service}/stop")
+def stop_service(service: str):
+    """Stop a project service."""
+    engine = get_engine()
+    from opero.services.manager import ServiceManager
+    mgr = ServiceManager(engine.project_path)
+    return mgr.stop(service)
+
+
+@app.get("/services/{service}/log")
+def service_log(service: str, lines: int = 50):
+    """Get recent log output for a service."""
+    engine = get_engine()
+    from opero.services.manager import ServiceManager
+    mgr = ServiceManager(engine.project_path)
+    return {"log": mgr.get_log(service, lines)}
+
+
 @app.post("/git/sync")
 def sync_git():
     engine = get_engine()

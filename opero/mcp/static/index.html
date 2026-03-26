@@ -326,6 +326,31 @@ body {
 .detail-meta-item { font-size: 11px; color: var(--text2); }
 .detail-meta-item strong { color: var(--text); }
 
+/* Services bar */
+.services-bar {
+  display: flex; gap: 10px; padding: 6px 20px; border-bottom: 1px solid var(--border);
+  background: var(--surface); align-items: center;
+}
+.services-bar .svc-label { font-size: 10px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; margin-right: 4px; }
+.svc-pill {
+  display: flex; align-items: center; gap: 5px; padding: 3px 10px;
+  border-radius: 12px; font-size: 11px; border: 1px solid var(--border);
+  background: var(--surface2); cursor: default;
+}
+.svc-pill.running { border-color: rgba(34,197,94,0.4); }
+.svc-pill .svc-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text2); }
+.svc-pill.running .svc-dot { background: #22c55e; animation: pulse 1.5s infinite; }
+.svc-pill a { color: var(--accent); text-decoration: none; font-size: 10px; }
+.svc-pill a:hover { text-decoration: underline; }
+.svc-btn {
+  background: none; border: 1px solid var(--border); color: var(--text2);
+  font-size: 9px; padding: 1px 6px; border-radius: 4px; cursor: pointer;
+  font-family: var(--font);
+}
+.svc-btn:hover { color: var(--text); border-color: var(--text2); }
+.svc-btn.stop { color: #f87171; border-color: rgba(220,38,38,0.3); }
+.svc-btn.stop:hover { border-color: #f87171; }
+
 .panel { display: none; flex: 1; overflow: hidden; }
 .panel.active { display: flex; flex-direction: column; }
 .empty-state { text-align: center; padding: 40px 20px; color: var(--text2); font-size: 12px; }
@@ -353,6 +378,11 @@ body {
   <div class="tab" data-panel="kanban">All Tasks</div>
   <div class="tab" data-panel="agents">Agents</div>
   <div class="tab" data-panel="memory">Memory</div>
+</div>
+
+<div class="services-bar" id="servicesBar">
+  <span class="svc-label">Services</span>
+  <div id="servicesPills"></div>
 </div>
 
 <div class="main">
@@ -879,12 +909,40 @@ async function openFeatureDetail(featureId) {
   } catch(e) { document.getElementById('detailBody').innerHTML = `<div class="empty-state">Error: ${e.message}</div>`; }
 }
 
+// --- Services ---
+async function loadServices() {
+  try {
+    const data = await get('/services');
+    const svcs = data.services || [];
+    document.getElementById('servicesPills').innerHTML = svcs.map(s => {
+      const cls = s.running ? 'running' : '';
+      const link = s.running ? `<a href="${s.url}" target="_blank">${s.url}</a>` : `port ${s.port}`;
+      const btn = s.running
+        ? `<button class="svc-btn stop" onclick="toggleService('${s.service}','stop')">Stop</button>`
+        : `<button class="svc-btn" onclick="toggleService('${s.service}','start')">Start</button>`;
+      return `<div class="svc-pill ${cls}">
+        <span class="svc-dot"></span>
+        <span>${s.icon} ${s.name}</span>
+        <span style="font-size:10px;color:var(--text2)">${link}</span>
+        ${btn}
+      </div>`;
+    }).join('');
+  } catch(e) {}
+}
+
+async function toggleService(service, action) {
+  try {
+    await post(`/services/${service}/${action}`, {});
+    await loadServices();
+  } catch(e) { console.error(e); }
+}
+
 async function refresh() {
   await loadStatus();
   const active = document.querySelector('.tab.active')?.dataset.panel;
   if (active === 'features') await loadFeatures();
   if (active === 'kanban') await loadFlatKanban();
-  await Promise.all([loadClaudeStatus(), loadActivity()]);
+  await Promise.all([loadClaudeStatus(), loadActivity(), loadServices()]);
 }
 
 refresh();

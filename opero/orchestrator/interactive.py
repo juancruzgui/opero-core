@@ -40,7 +40,10 @@ def _ensure_mcp_config(project_path: str) -> str:
                 "command": py,
                 "args": ["-m", "opero.mcp.stdio_server"],
                 "env": env,
-            }
+            },
+            "supabase": {
+                "url": "http://127.0.0.1:54321/mcp",
+            },
         }
     }
     mcp_path.write_text(json.dumps(config, indent=2))
