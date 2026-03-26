@@ -68,9 +68,8 @@ class OperoEngine:
         self.projects.set_memory(project.id, "status", "initialized", "system")
         self.projects.set_memory(project.id, "name", project_name, "identity")
 
-        # Create .gitignore for opero internals
-        gitignore_path = Path(self.project_path) / ".opero" / ".gitignore"
-        gitignore_path.write_text("opero.db\nopero.db-wal\nopero.db-shm\n")
+        # Ensure project .gitignore covers all opero-generated files
+        self._update_project_gitignore()
 
         # Wire up Claude Code automatically
         from opero.integrations.claude_code import ClaudeCodeIntegration
@@ -80,6 +79,32 @@ class OperoEngine:
         claude.install_mcp()
 
         return project
+
+    def _update_project_gitignore(self) -> None:
+        """Add opero entries to the project's .gitignore."""
+        gitignore_path = Path(self.project_path) / ".gitignore"
+
+        existing = ""
+        if gitignore_path.exists():
+            existing = gitignore_path.read_text()
+
+        entries = [
+            "# Opero Core (auto-added)",
+            ".opero/",
+            ".opero-core/",
+            ".claude/",
+            "CLAUDE.md",
+        ]
+
+        to_add = []
+        for entry in entries:
+            if entry not in existing:
+                to_add.append(entry)
+
+        if to_add:
+            separator = "\n" if existing and not existing.endswith("\n") else ""
+            addition = separator + "\n".join(to_add) + "\n"
+            gitignore_path.write_text(existing + addition)
 
     def status(self) -> dict:
         """Get full system status."""
