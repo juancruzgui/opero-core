@@ -188,6 +188,23 @@ def init_db(project_path: str) -> sqlite3.Connection:
     return conn
 
 
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Add missing columns to existing tables."""
+    migrations = [
+        ("tasks", "feature_id", "ALTER TABLE tasks ADD COLUMN feature_id TEXT"),
+    ]
+    for table, column, sql in migrations:
+        try:
+            # Check if column exists
+            cursor = conn.execute(f"PRAGMA table_info({table})")
+            columns = [row[1] for row in cursor.fetchall()]
+            if column not in columns:
+                conn.execute(sql)
+        except Exception:
+            pass
+    conn.commit()
+
+
 def get_connection(project_path: str) -> sqlite3.Connection:
     db_path = get_db_path(project_path)
     if not db_path.exists():
@@ -198,5 +215,7 @@ def get_connection(project_path: str) -> sqlite3.Connection:
     conn.execute("PRAGMA foreign_keys=ON")
     # Always run schema to pick up new tables (CREATE IF NOT EXISTS is safe)
     conn.executescript(SCHEMA)
+    # Add missing columns to existing tables
+    _migrate(conn)
     conn.commit()
     return conn
