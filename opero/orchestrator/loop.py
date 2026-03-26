@@ -158,15 +158,17 @@ class OrchestratorLoop:
         import opero
         opero_root = str(Path(opero.__file__).resolve().parent.parent)
 
-        # Always update to ensure correct paths
-        py = sys.executable
+        # Prefer the venv Python if it exists
+        venv_python = Path(self.project_path).resolve() / ".opero" / "venv" / "bin" / "python"
+        py = str(venv_python) if venv_python.exists() else sys.executable
         env = {"OPERO_PROJECT_PATH": abs_project_path}
-        # If opero is not pip-installed, add source dir to PYTHONPATH
-        try:
-            from importlib.metadata import distribution
-            distribution("opero")
-        except Exception:
-            env["PYTHONPATH"] = opero_root
+        # If not using venv, add source dir to PYTHONPATH
+        if not venv_python.exists():
+            try:
+                from importlib.metadata import distribution
+                distribution("opero")
+            except Exception:
+                env["PYTHONPATH"] = opero_root
 
         config = {
             "mcpServers": {

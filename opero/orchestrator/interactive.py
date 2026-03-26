@@ -22,13 +22,17 @@ def _ensure_mcp_config(project_path: str) -> str:
     import opero
     opero_root = str(Path(opero.__file__).resolve().parent.parent)
 
-    py = sys.executable
+    # Prefer the venv Python if it exists
+    venv_python = Path(project_path).resolve() / ".opero" / "venv" / "bin" / "python"
+    py = str(venv_python) if venv_python.exists() else sys.executable
     env = {"OPERO_PROJECT_PATH": abs_project_path}
-    try:
-        from importlib.metadata import distribution
-        distribution("opero")
-    except Exception:
-        env["PYTHONPATH"] = opero_root
+    # If not using venv (no pip install), add source dir to PYTHONPATH
+    if not venv_python.exists():
+        try:
+            from importlib.metadata import distribution
+            distribution("opero")
+        except Exception:
+            env["PYTHONPATH"] = opero_root
 
     config = {
         "mcpServers": {
@@ -195,9 +199,13 @@ def _start_dashboard_background(project_path: str, port: int = 7437):
     except (URLError, OSError):
         pass
 
+    # Find the right Python — prefer the venv if it exists
+    venv_python = Path(project_path) / ".opero" / "venv" / "bin" / "python"
+    py = str(venv_python) if venv_python.exists() else sys.executable
+
     # Start server
     subprocess.Popen(
-        [sys.executable, "-m", "uvicorn", "opero.mcp.server:app",
+        [py, "-m", "uvicorn", "opero.mcp.server:app",
          "--host", "0.0.0.0", "--port", str(port), "--log-level", "error"],
         cwd=project_path,
         stdout=subprocess.DEVNULL,
