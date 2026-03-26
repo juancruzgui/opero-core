@@ -181,4 +181,7 @@ def get_connection(project_path: str) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
+    # Always run schema to pick up new tables (CREATE IF NOT EXISTS is safe)
+    conn.executescript(SCHEMA)
+    conn.commit()
     return conn
