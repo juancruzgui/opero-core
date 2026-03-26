@@ -278,7 +278,14 @@ class ClaudeCodeIntegration:
         return settings_path
 
     def _find_python(self) -> str:
-        """Find the Python interpreter that has opero installed."""
+        """Find the Python interpreter that has opero installed.
+
+        Prefers the opero venv if it exists (.opero/venv/bin/python),
+        otherwise falls back to the current interpreter.
+        """
+        venv_python = Path(self.project_path) / ".opero" / "venv" / "bin" / "python"
+        if venv_python.exists():
+            return str(venv_python)
         import sys
         return sys.executable
 
