@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+.opero/opero.db
+.opero/opero.db-wal
+.opero/opero.db-shm
+.env
