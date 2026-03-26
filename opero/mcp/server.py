@@ -548,18 +548,47 @@ def agents_workbench():
             (f"agent-{a.name}",),
         ).fetchone()
 
-        # Session info
+        # Latest heartbeat message (from opero_agent_status calls)
+        last_heartbeat = conn.execute(
+            "SELECT detail FROM claude_activity WHERE session_id = ? AND action = 'heartbeat' ORDER BY created_at DESC LIMIT 1",
+            (f"agent-{a.name}",),
+        ).fetchone()
+        last_status_message = ""
+        if last_heartbeat:
+            # detail format is "[agent_name] message", strip the prefix
+            msg = dict(last_heartbeat).get("detail", "")
+            if "] " in msg:
+                last_status_message = msg.split("] ", 1)[1]
+            else:
+                last_status_message = msg
+
+        # Session info (check if recently active)
         session = conn.execute(
             "SELECT * FROM claude_sessions WHERE id = ?",
             (f"agent-{a.name}",),
         ).fetchone()
 
+        # For orchestrator, consider "working" if there's been activity in last 30s
+        is_working = running is not None
+        if a.name == "orchestrator" and session:
+            s = dict(session)
+            if s.get("status") == "active" and s.get("last_heartbeat"):
+                from datetime import datetime
+                try:
+                    last = datetime.fromisoformat(s["last_heartbeat"])
+                    age = (datetime.utcnow() - last).total_seconds()
+                    if age < 30:
+                        is_working = True
+                except (ValueError, TypeError):
+                    pass
+
         agent_data = {
             "name": a.name,
             "description": a.description,
             "capabilities": a.capabilities,
-            "status": "working" if running else "idle",
+            "status": "working" if is_working else "idle",
             "current_task": None,
+            "last_status_message": last_status_message,
             "stats": {
                 "completed": dict(stats)["completed"] or 0 if stats else 0,
                 "failed": dict(stats)["failed"] or 0 if stats else 0,

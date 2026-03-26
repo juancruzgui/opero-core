@@ -206,6 +206,12 @@ body {
   padding: 14px; position: relative; overflow: hidden;
 }
 .agent-card.working { border-color: rgba(34,197,94,0.4); }
+.agent-card.orchestrator {
+  border-color: var(--accent); background: linear-gradient(135deg, var(--surface) 0%, rgba(139,92,246,0.08) 100%);
+  grid-column: 1 / -1;
+}
+.agent-card.orchestrator .agent-name { font-size: 15px; }
+.agent-card.orchestrator .agent-status.working { background: rgba(139,92,246,0.2); color: var(--accent); border-color: var(--accent); }
 .agent-card .agent-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
 .agent-card .agent-name { font-size: 13px; font-weight: 600; color: var(--accent); }
 .agent-card .agent-status {
@@ -692,10 +698,13 @@ async function loadAgents() {
       orchBar.classList.add('hidden');
     }
 
-    // Agent cards
+    // Agent cards — orchestrator first, then rest
     const agents = wb.agents || [];
+    agents.sort((a, b) => a.name === 'orchestrator' ? -1 : b.name === 'orchestrator' ? 1 : 0);
     document.getElementById('agentsGrid').innerHTML = agents.map(a => {
+      const isOrch = a.name === 'orchestrator';
       const isWorking = a.status === 'working';
+      const isActive = isWorking || (isOrch && a.last_activity && timeAgo(a.last_activity).match(/^(now|\d+s)$/));
       const caps = a.capabilities || [];
       let taskHtml = '';
       if (isWorking && a.current_task) {
@@ -707,13 +716,22 @@ async function loadAgents() {
           <div style="font-size:9px;color:var(--text2)">${a.current_task.task_id}</div>
         </div>`;
       }
-      return `<div class="agent-card${isWorking ? ' working' : ''}">
+      // For orchestrator, show the latest heartbeat message
+      let statusMsg = '';
+      if (isOrch && a.last_status_message) {
+        statusMsg = `<div class="agent-task"><div class="task-name">${esc(a.last_status_message)}</div></div>`;
+      }
+      const cardClass = `agent-card${isActive ? ' working' : ''}${isOrch ? ' orchestrator' : ''}`;
+      const statusLabel = isOrch
+        ? (isActive ? '🧠 Active' : 'Offline')
+        : (isWorking ? '● Working' : 'Idle');
+      return `<div class="${cardClass}">
         <div class="agent-header">
-          <span class="agent-name">${a.name}</span>
-          <span class="agent-status ${a.status}">${isWorking ? '● Working' : 'Idle'}</span>
+          <span class="agent-name">${isOrch ? '🧠 ' : ''}${a.name}</span>
+          <span class="agent-status ${isActive ? 'working' : 'idle'}">${statusLabel}</span>
         </div>
         <div class="agent-desc">${esc(a.description || '')}</div>
-        ${taskHtml}
+        ${statusMsg}${taskHtml}
         <div class="agent-stats">
           <span><span class="stat-val">${a.stats.completed}</span> done</span>
           <span><span class="stat-val">${a.stats.failed}</span> failed</span>

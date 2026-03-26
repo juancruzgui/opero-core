@@ -47,10 +47,13 @@ def _ensure_mcp_config(project_path: str) -> str:
     return str(mcp_path)
 
 
-def _build_system_prompt(project_path: str, project_id: str) -> str:
+def _build_system_prompt(project_path: str, project_id: str, venv_python: str = "") -> str:
     """Build the system prompt for the interactive PM session."""
     from opero.core.engine import OperoEngine
     engine = OperoEngine(project_path)
+    if not venv_python:
+        vp = Path(project_path) / ".opero" / "venv" / "bin" / "python"
+        venv_python = str(vp) if vp.exists() else "python"
 
     # Gather current state
     project = engine.projects.get_by_path()
@@ -80,9 +83,24 @@ testing, and reviewing.
 Tasks: {todo} todo, {in_progress} in progress, {done} done, {blocked} blocked
 {feature_summary}
 
+## IMPORTANT: Register yourself on the dashboard
+
+At the START of every conversation, and whenever you begin a new action, call:
+```
+opero_agent_status(agent_name="orchestrator", status_message="your current action")
+```
+Examples:
+- Starting: `opero_agent_status(agent_name="orchestrator", status_message="Ready — waiting for user input")`
+- Planning: `opero_agent_status(agent_name="orchestrator", status_message="Analyzing spec and creating feature tree")`
+- Building: `opero_agent_status(agent_name="orchestrator", status_message="Dispatching dev agents")`
+- Reviewing: `opero_agent_status(agent_name="orchestrator", status_message="Reviewing completed tasks")`
+
+This makes you visible in the Agents dashboard at http://localhost:7437 so the user can see you're active.
+
 ## Your Capabilities
 
 You have access to the opero MCP tools:
+- `opero_agent_status` — **call this first and often** to show your status on the dashboard
 - `opero_feature_create` / `opero_feature_list` / `opero_feature_get` / `opero_feature_update` — manage features
 - `opero_feature_task` — create tasks under features
 - `opero_task_create` / `opero_tasks_list` / `opero_task_update` — manage tasks
@@ -96,22 +114,25 @@ You can also Edit files, run Bash commands, and do everything Claude Code can do
 ## How to Work
 
 ### When the user describes what they want to build:
-1. Ask clarifying questions to understand the full scope
-2. Propose a feature breakdown — show them the plan
-3. When they approve, create features and tasks using the MCP tools
-4. Each task MUST have `success_criteria` — specific, testable conditions
+1. Call `opero_agent_status(agent_name="orchestrator", status_message="Planning: analyzing requirements")`
+2. Ask clarifying questions to understand the full scope
+3. Propose a feature breakdown — show them the plan
+4. When they approve, create features and tasks using the MCP tools
+5. Each task MUST have `success_criteria` — specific, testable conditions
 
 ### When the user says to start building (e.g. "go", "build it", "start"):
-1. Run the orchestrator loop by executing:
+1. Call `opero_agent_status(agent_name="orchestrator", status_message="Starting build loop")`
+2. Run the orchestrator loop by executing:
    ```bash
-   python -m opero.orchestrator.run_loop --project-path "{project_path}" --project-id "{project_id}"
+   {venv_python} -m opero.orchestrator.run_loop --project-path "{project_path}" --project-id "{project_id}"
    ```
    This launches dev agents in the background.
-2. Tell the user the loop is running and they can watch at http://localhost:7437
+3. Tell the user the loop is running and they can watch at http://localhost:7437
 
 ### When the user asks about progress:
-1. Call `opero_tasks_list` and `opero_feature_list` to check status
-2. Summarize what's done, in progress, and blocked
+1. Call `opero_agent_status(agent_name="orchestrator", status_message="Checking progress")`
+2. Call `opero_tasks_list` and `opero_feature_list` to check status
+3. Summarize what's done, in progress, and blocked
 
 ### When the user wants to change scope:
 1. Create/update features and tasks as needed

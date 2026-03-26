@@ -41,6 +41,12 @@ DEFAULT_AGENTS = [
         description="Debugging agent — diagnoses and fixes issues in code",
     ),
     Agent(
+        name="orchestrator",
+        capabilities=["plan", "coordinate", "review", "dispatch", "analyze"],
+        tools=["filesystem", "git", "shell", "web_search"],
+        description="Orchestrator — the main brain that talks to the user, plans work, and dispatches agents",
+    ),
+    Agent(
         name="pm_analyst",
         capabilities=["analyze", "plan", "decompose", "review", "prioritize"],
         tools=["filesystem", "web_search"],
