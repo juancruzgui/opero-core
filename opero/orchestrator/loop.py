@@ -150,9 +150,10 @@ class OrchestratorLoop:
     # ------------------------------------------------------------------
 
     def _ensure_mcp_config(self):
-        """Ensure .mcp.json exists so Claude Code can access opero MCP tools."""
-        mcp_path = Path(self.project_path).resolve() / ".mcp.json"
+        """Ensure MCP config exists so Claude Code can access opero MCP tools."""
         abs_project_path = str(Path(self.project_path).resolve())
+        mcp_path = Path(abs_project_path) / ".opero" / "mcp-cli.json"
+        mcp_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Find the opero package root (parent of the opero/ package dir)
         import opero
@@ -176,9 +177,6 @@ class OrchestratorLoop:
                     "command": py,
                     "args": ["-m", "opero.mcp.stdio_server"],
                     "env": env,
-                },
-                "supabase": {
-                    "url": "http://127.0.0.1:54321/mcp",
                 },
             }
         }

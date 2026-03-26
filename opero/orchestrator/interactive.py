@@ -15,9 +15,15 @@ from pathlib import Path
 
 
 def _ensure_mcp_config(project_path: str) -> str:
-    """Ensure .mcp.json exists for MCP tool access."""
-    mcp_path = Path(project_path).resolve() / ".mcp.json"
+    """Ensure MCP configs exist for tool access.
+
+    Creates two files:
+    - .opero/mcp-cli.json — passed via --mcp-config (opero only, command/args format)
+    - .mcp.json — project-level config Claude Code reads (includes supabase url format)
+    """
     abs_project_path = str(Path(project_path).resolve())
+    mcp_path = Path(abs_project_path) / ".opero" / "mcp-cli.json"
+    mcp_path.parent.mkdir(parents=True, exist_ok=True)
 
     import opero
     opero_root = str(Path(opero.__file__).resolve().parent.parent)
@@ -34,19 +40,28 @@ def _ensure_mcp_config(project_path: str) -> str:
         except Exception:
             env["PYTHONPATH"] = opero_root
 
-    config = {
+    # CLI config (--mcp-config flag): opero only, command/args format
+    cli_config = {
         "mcpServers": {
             "opero": {
                 "command": py,
                 "args": ["-m", "opero.mcp.stdio_server"],
                 "env": env,
             },
-            "supabase": {
-                "url": "http://127.0.0.1:54321/mcp",
-            },
         }
     }
-    mcp_path.write_text(json.dumps(config, indent=2))
+    mcp_path.write_text(json.dumps(cli_config, indent=2))
+
+    # Project .mcp.json: includes supabase (url format, read by Claude Code from project dir)
+    project_mcp = Path(abs_project_path) / ".mcp.json"
+    project_config = {
+        "mcpServers": {
+            "opero": cli_config["mcpServers"]["opero"],
+            "supabase": {"url": "http://127.0.0.1:54321/mcp"},
+        }
+    }
+    project_mcp.write_text(json.dumps(project_config, indent=2))
+
     return str(mcp_path)
 
 
