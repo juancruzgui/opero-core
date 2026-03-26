@@ -53,19 +53,21 @@ class ClaudeCodeIntegration:
         sections.append("")
         sections.append("This project is managed by Opero Core. You MUST follow these rules:")
         sections.append("")
-        sections.append("### Workflow")
+        sections.append("### MANDATORY Workflow")
         sections.append("Work is organized as: **Project → Features → Tasks**")
         sections.append("")
-        sections.append("1. **Check features first**: Run `opero features` to see what's being built")
-        sections.append("2. **Create features for new work**: `opero features add -t 'Auth System'` — group related tasks")
-        sections.append("3. **Activate feature**: `opero features update --id <id> --status active`")
-        sections.append("4. **Create tasks under features**: Tasks must belong to a feature")
-        sections.append("5. **Update task status**: `in_progress` when starting, `done` when finished")
-        sections.append("6. **Store decisions**: When making architectural choices")
-        sections.append("7. **Store learnings**: When discovering gotchas or insights")
-        sections.append("8. **Search memory before deciding**: Check for prior decisions")
-        sections.append("9. **DO NOT commit manually**: Opero auto-commits every file change, linked to the active task")
-        sections.append("10. **DO NOT run git commands**: Opero handles all git operations")
+        sections.append("**BEFORE writing any code, you MUST call `opero_start_work`.**")
+        sections.append("This tool searches for existing tasks, creates one, stores the user's intent, and gives you relevant memories.")
+        sections.append("")
+        sections.append("**AFTER finishing work, you MUST call `opero_complete_work`.**")
+        sections.append("This stores what you built, what you learned, and any decisions made.")
+        sections.append("")
+        sections.append("1. User asks for something → call `opero_start_work` with their request, your intent, and thought process")
+        sections.append("2. Review the returned existing tasks and memories — don't duplicate work")
+        sections.append("3. Write code (Opero auto-commits every change)")
+        sections.append("4. When done → call `opero_complete_work` with outcome, learnings, and decisions")
+        sections.append("5. **DO NOT commit manually** — Opero handles git automatically")
+        sections.append("6. **DO NOT skip opero_start_work** — every piece of work must be tracked")
         sections.append("")
 
         # Commands reference
@@ -207,6 +209,16 @@ class ClaudeCodeIntegration:
         py = self._find_python()
         return {
             "hooks": {
+                "UserPromptSubmit": [
+                    {
+                        "hooks": [
+                            {
+                                "type": "command",
+                                "command": f"{py} -m opero.integrations.claude_code --hook user-prompt"
+                            }
+                        ]
+                    }
+                ],
                 "PostToolUse": [
                     {
                         "matcher": "Bash|Edit|Write",
@@ -546,6 +558,55 @@ def handle_post_tool(hook_input: dict = None):
         pass
 
 
+def handle_user_prompt(hook_input: dict = None):
+    """When user submits a prompt, inject Opero context as a reminder.
+
+    This hook fires BEFORE Claude processes the message. It outputs
+    a message that gets injected into Claude's context, reminding it
+    to use opero_start_work before writing any code.
+    """
+    try:
+        if hook_input is None:
+            hook_input = _parse_hook_input()
+
+        cwd = os.getcwd()
+        engine = OperoEngine(cwd)
+        if not engine.is_initialized():
+            return
+
+        project = engine.projects.get_by_path()
+        if not project:
+            return
+
+        # Build a concise status for Claude
+        all_tasks = engine.tasks.list_tasks(project_id=project.id)
+        in_progress = [t for t in all_tasks if t.status.value == "in_progress"]
+        features = engine.features.list_features(project.id)
+        active_features = [f for f in features if f.status.value == "active"]
+
+        lines = []
+        lines.append("[OPERO] You MUST call opero_start_work BEFORE writing any code.")
+
+        if in_progress:
+            lines.append(f"[OPERO] Tasks in progress: {', '.join(t.title + ' (' + t.id + ')' for t in in_progress)}")
+
+        if active_features:
+            lines.append(f"[OPERO] Active features: {', '.join(f.title for f in active_features)}")
+
+        lines.append("[OPERO] When done, call opero_complete_work with outcome and learnings.")
+
+        # Output to stdout — Claude Code injects this into the conversation
+        import sys
+        sys.stderr.write("\n".join(lines) + "\n")
+
+        # Log the prompt as activity
+        user_msg = hook_input.get("prompt", "")
+        _log_activity("user", "prompt", detail=user_msg[:200] if user_msg else "")
+
+    except Exception:
+        pass
+
+
 def handle_pre_tool(hook_input: dict = None):
     """Before a tool call, ensure CLAUDE.md exists and log session start."""
     try:
@@ -606,7 +667,9 @@ if __name__ == "__main__":
     if "--hook" in args:
         idx = args.index("--hook")
         hook_type = args[idx + 1] if idx + 1 < len(args) else ""
-        if hook_type == "post-tool":
+        if hook_type == "user-prompt":
+            handle_user_prompt(hook_input)
+        elif hook_type == "post-tool":
             handle_post_tool(hook_input)
         elif hook_type == "pre-tool":
             handle_pre_tool(hook_input)
