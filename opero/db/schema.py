@@ -189,19 +189,54 @@ def init_db(project_path: str) -> sqlite3.Connection:
 
 
 def _migrate(conn: sqlite3.Connection) -> None:
-    """Add missing columns to existing tables."""
-    migrations = [
-        ("tasks", "feature_id", "ALTER TABLE tasks ADD COLUMN feature_id TEXT"),
-    ]
-    for table, column, sql in migrations:
+    """Auto-migrate: add missing columns to existing tables.
+
+    Compares the SCHEMA definition against what's actually in the DB
+    and ALTERs tables to add any missing columns. This runs on every
+    connection so users pulling updates never need manual migration.
+    """
+    import re
+
+    # Parse CREATE TABLE statements from SCHEMA to find expected columns
+    table_defs = re.findall(
+        r'CREATE TABLE IF NOT EXISTS (\w+)\s*\((.*?)\);',
+        SCHEMA, re.DOTALL
+    )
+
+    for table_name, body in table_defs:
+        # Get existing columns from DB
         try:
-            # Check if column exists
-            cursor = conn.execute(f"PRAGMA table_info({table})")
-            columns = [row[1] for row in cursor.fetchall()]
-            if column not in columns:
-                conn.execute(sql)
+            cursor = conn.execute(f"PRAGMA table_info({table_name})")
+            existing_cols = {row[1] for row in cursor.fetchall()}
         except Exception:
-            pass
+            continue
+
+        # Parse expected columns from schema (skip constraints like FOREIGN KEY, UNIQUE, CHECK)
+        for line in body.split(","):
+            line = line.strip()
+            if not line:
+                continue
+            # Skip table constraints
+            upper = line.upper().lstrip()
+            if upper.startswith(("FOREIGN KEY", "UNIQUE", "CHECK", "PRIMARY KEY")):
+                continue
+
+            # First word is the column name
+            parts = line.split()
+            if not parts:
+                continue
+            col_name = parts[0].strip('"').strip("'")
+
+            if col_name.upper() in ("CREATE", "TABLE", "IF", "NOT", "EXISTS"):
+                continue
+
+            if col_name not in existing_cols:
+                # Build ALTER statement — use the full column definition
+                try:
+                    conn.execute(f"ALTER TABLE {table_name} ADD COLUMN {line}")
+                except Exception:
+                    pass  # Column might have constraints that fail on ALTER, skip
+
     conn.commit()
 
 
