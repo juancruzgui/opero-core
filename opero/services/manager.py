@@ -136,26 +136,24 @@ class ServiceManager:
         self._pid_file(service).unlink(missing_ok=True)
 
     def is_running(self, service: str) -> bool:
-        """Check if a service is running via its PID or port."""
-        if self._read_pid(service):
-            return True
-        svc = self._get_service_config(service)
-        if svc.get("port"):
-            return not _is_port_free(svc["port"])
-        return False
+        """Check if a service WE started is running (by PID only)."""
+        return self._read_pid(service) is not None
 
     def status(self, service: str) -> dict:
         """Get status of a service."""
         svc = self._get_service_config(service)
         running = self.is_running(service)
         pid = self._read_pid(service)
+        port = svc.get("port", 0)
+        port_busy = not _is_port_free(port) if port else False
         return {
             "service": service,
             "name": svc.get("name", service),
-            "port": svc.get("port"),
+            "port": port,
             "running": running,
+            "port_busy": port_busy and not running,  # port taken by something else
             "pid": pid,
-            "url": f"http://localhost:{svc.get('port')}" if running else None,
+            "url": f"http://localhost:{port}" if running else None,
             "icon": svc.get("icon", ""),
         }
 

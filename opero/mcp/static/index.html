@@ -338,6 +338,8 @@ body {
   background: var(--surface2); cursor: default;
 }
 .svc-pill.running { border-color: rgba(34,197,94,0.4); }
+.svc-pill.busy { border-color: rgba(249,115,22,0.4); }
+.svc-pill.busy .svc-dot { background: #f97316; }
 .svc-pill .svc-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text2); }
 .svc-pill.running .svc-dot { background: #22c55e; animation: pulse 1.5s infinite; }
 .svc-pill a { color: var(--accent); text-decoration: none; font-size: 10px; }
@@ -915,11 +917,18 @@ async function loadServices() {
     const data = await get('/services');
     const svcs = data.services || [];
     document.getElementById('servicesPills').innerHTML = svcs.map(s => {
-      const cls = s.running ? 'running' : '';
-      const link = s.running ? `<a href="${s.url}" target="_blank">${s.url}</a>` : `port ${s.port}`;
-      const btn = s.running
-        ? `<button class="svc-btn stop" onclick="toggleService('${s.service}','stop')">Stop</button>`
-        : `<button class="svc-btn" onclick="toggleService('${s.service}','start')">Start</button>`;
+      const cls = s.running ? 'running' : s.port_busy ? 'busy' : '';
+      let link, btn;
+      if (s.running) {
+        link = `<a href="${s.url}" target="_blank">:${s.port}</a>`;
+        btn = `<button class="svc-btn stop" onclick="toggleService('${s.service}','stop')">Stop</button>`;
+      } else if (s.port_busy) {
+        link = `<span style="color:#f97316">:${s.port} in use</span>`;
+        btn = `<button class="svc-btn" onclick="toggleService('${s.service}','start')">Start (new port)</button>`;
+      } else {
+        link = `<span>:${s.port}</span>`;
+        btn = `<button class="svc-btn" onclick="toggleService('${s.service}','start')">Start</button>`;
+      }
       return `<div class="svc-pill ${cls}">
         <span class="svc-dot"></span>
         <span>${s.icon} ${s.name}</span>
