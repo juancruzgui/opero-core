@@ -561,9 +561,8 @@ def handle_post_tool(hook_input: dict = None):
 def handle_user_prompt(hook_input: dict = None):
     """When user submits a prompt, inject Opero context as a reminder.
 
-    This hook fires BEFORE Claude processes the message. It outputs
-    a message that gets injected into Claude's context, reminding it
-    to use opero_start_work before writing any code.
+    This hook fires BEFORE Claude processes the message. Outputs JSON
+    with additionalContext that gets injected into Claude's context.
     """
     try:
         if hook_input is None:
@@ -578,26 +577,38 @@ def handle_user_prompt(hook_input: dict = None):
         if not project:
             return
 
-        # Build a concise status for Claude
+        # Build context for Claude
         all_tasks = engine.tasks.list_tasks(project_id=project.id)
         in_progress = [t for t in all_tasks if t.status.value == "in_progress"]
         features = engine.features.list_features(project.id)
         active_features = [f for f in features if f.status.value == "active"]
 
         lines = []
-        lines.append("[OPERO] You MUST call opero_start_work BEFORE writing any code.")
+        lines.append("[OPERO] MANDATORY: Call opero_start_work BEFORE writing any code. Call opero_complete_work when done.")
 
         if in_progress:
-            lines.append(f"[OPERO] Tasks in progress: {', '.join(t.title + ' (' + t.id + ')' for t in in_progress)}")
+            task_list = ", ".join(f"{t.title} ({t.id})" for t in in_progress[:3])
+            lines.append(f"[OPERO] In progress: {task_list}")
 
         if active_features:
-            lines.append(f"[OPERO] Active features: {', '.join(f.title for f in active_features)}")
+            feat_list = ", ".join(f"{f.title} ({f.id})" for f in active_features[:3])
+            lines.append(f"[OPERO] Active features: {feat_list}")
 
-        lines.append("[OPERO] When done, call opero_complete_work with outcome and learnings.")
+        if not in_progress and not active_features:
+            lines.append("[OPERO] No active work. Use opero_start_work to create a feature and task first.")
 
-        # Output to stdout — Claude Code injects this into the conversation
+        context = "\n".join(lines)
+
+        # Output structured JSON to stdout — Claude Code injects additionalContext
         import sys
-        sys.stderr.write("\n".join(lines) + "\n")
+        output = json.dumps({
+            "hookSpecificOutput": {
+                "hookEventName": "UserPromptSubmit",
+                "additionalContext": context,
+            }
+        })
+        sys.stdout.write(output)
+        sys.stdout.flush()
 
         # Log the prompt as activity
         user_msg = hook_input.get("prompt", "")
