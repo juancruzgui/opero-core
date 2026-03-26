@@ -206,6 +206,64 @@ body {
 .memory-item .mem-content { font-size: 11px; color: var(--text2); margin-top: 3px; }
 .memory-item .mem-tags { display: flex; gap: 3px; margin-top: 6px; }
 .tag { font-size: 9px; padding: 1px 5px; border-radius: 3px; background: var(--surface2); color: var(--text2); border: 1px solid var(--border); }
+/* Detail slide-over panel */
+.detail-overlay {
+  display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.5); z-index: 100;
+}
+.detail-overlay.open { display: block; }
+.detail-panel {
+  position: fixed; top: 0; right: -500px; width: 480px; height: 100vh;
+  background: var(--bg); border-left: 1px solid var(--border);
+  z-index: 101; display: flex; flex-direction: column;
+  transition: right 0.2s ease;
+}
+.detail-panel.open { right: 0; }
+.detail-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 14px 18px; border-bottom: 1px solid var(--border); background: var(--surface);
+}
+.detail-title { font-size: 14px; font-weight: 600; }
+.detail-close {
+  background: none; border: 1px solid var(--border); color: var(--text2);
+  width: 28px; height: 28px; border-radius: 4px; cursor: pointer;
+  font-size: 12px; display: flex; align-items: center; justify-content: center;
+}
+.detail-close:hover { color: var(--text); border-color: var(--text2); }
+.detail-body { flex: 1; overflow-y: auto; padding: 16px 18px; }
+
+/* Timeline */
+.timeline { position: relative; padding-left: 20px; }
+.timeline::before {
+  content: ''; position: absolute; left: 6px; top: 0; bottom: 0;
+  width: 1px; background: var(--border);
+}
+.tl-item {
+  position: relative; margin-bottom: 14px; padding-left: 14px;
+}
+.tl-item::before {
+  content: ''; position: absolute; left: -17px; top: 4px;
+  width: 9px; height: 9px; border-radius: 50%; border: 2px solid var(--border);
+  background: var(--bg);
+}
+.tl-item.tl-commit::before { border-color: var(--done); background: var(--done); }
+.tl-item.tl-memory::before { border-color: var(--accent); background: var(--accent); }
+.tl-item.tl-activity::before { border-color: var(--progress); }
+.tl-time { font-size: 9px; color: var(--text2); }
+.tl-title { font-size: 12px; font-weight: 500; margin: 2px 0; }
+.tl-content { font-size: 11px; color: var(--text2); margin-top: 2px; white-space: pre-wrap; }
+.tl-badge { font-size: 9px; padding: 1px 5px; border-radius: 3px; margin-left: 4px; }
+
+.detail-section { margin-bottom: 16px; }
+.detail-section h4 {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+  color: var(--text2); margin-bottom: 8px; padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+.detail-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.detail-meta-item { font-size: 11px; color: var(--text2); }
+.detail-meta-item strong { color: var(--text); }
+
 .panel { display: none; flex: 1; overflow: hidden; }
 .panel.active { display: flex; flex-direction: column; }
 .empty-state { text-align: center; padding: 40px 20px; color: var(--text2); font-size: 12px; }
@@ -279,6 +337,16 @@ body {
     </div>
   </div>
 
+  <!-- Detail Panel (slide-over) -->
+  <div class="detail-overlay" id="detailOverlay" onclick="closeDetail()"></div>
+  <div class="detail-panel" id="detailPanel">
+    <div class="detail-header">
+      <span class="detail-title" id="detailTitle">—</span>
+      <button class="detail-close" onclick="closeDetail()">✕</button>
+    </div>
+    <div class="detail-body" id="detailBody"></div>
+  </div>
+
   <!-- Live Activity Sidebar -->
   <div class="activity-sidebar">
     <div class="sidebar-header">
@@ -327,7 +395,7 @@ function renderCard(task, showFeature) {
   const pc = task.priority <= 2 ? ` p${task.priority}` : '';
   const agent = task.assigned_agent ? `<span class="badge badge-agent">${task.assigned_agent}</span>` : '';
   const feat = showFeature && task._featureTitle ? `<span class="badge badge-feature">${esc(task._featureTitle)}</span>` : '';
-  return `<div class="card">
+  return `<div class="card" onclick="openTaskDetail('${task.id}')" style="cursor:pointer">
     <div class="card-id">${task.id}</div>
     <div class="card-title">${esc(task.title)}</div>
     <div class="card-meta">
@@ -340,7 +408,7 @@ function renderCard(task, showFeature) {
 
 function renderSmallCard(task) {
   const pc = task.priority <= 2 ? ` p${task.priority}` : '';
-  return `<div class="card">
+  return `<div class="card" onclick="openTaskDetail('${task.id}')" style="cursor:pointer">
     <div class="card-id">${task.id}</div>
     <div class="card-title">${esc(task.title)}</div>
     <div class="card-meta">
@@ -378,7 +446,7 @@ async function loadFeatures() {
       tasks.forEach(t => { if (buckets[t.status]) buckets[t.status].push(t); });
 
       html += `<div class="feature-card">
-        <div class="feature-header">
+        <div class="feature-header" onclick="openFeatureDetail('${f.id}')" style="cursor:pointer">
           <div>
             <span class="feature-title">${esc(f.title)}</span>
             ${f.description ? `<span style="color:var(--text2);font-size:11px;margin-left:8px">${esc(f.description)}</span>` : ''}
@@ -572,6 +640,93 @@ async function searchMemory() {
   renderMemoryList((data.results||[]).map(r=>r.memory));
 }
 document.getElementById('memorySearch').addEventListener('keydown',e=>{if(e.key==='Enter')searchMemory();});
+
+// --- Detail panel ---
+function openDetail() {
+  document.getElementById('detailOverlay').classList.add('open');
+  document.getElementById('detailPanel').classList.add('open');
+}
+function closeDetail() {
+  document.getElementById('detailOverlay').classList.remove('open');
+  document.getElementById('detailPanel').classList.remove('open');
+}
+function fmtTime(ds) {
+  if (!ds) return '';
+  try { return new Date(ds+(ds.includes('Z')?'':'Z')).toLocaleString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}); }
+  catch(e) { return ds; }
+}
+
+async function openTaskDetail(taskId) {
+  document.getElementById('detailTitle').textContent = 'Loading...';
+  document.getElementById('detailBody').innerHTML = '';
+  openDetail();
+  try {
+    const data = await get(`/task/history/${taskId}`);
+    const task = data.task;
+    const tl = data.timeline || [];
+    document.getElementById('detailTitle').textContent = task.title;
+    let html = `<div class="detail-section"><div class="detail-meta">
+      <div class="detail-meta-item"><strong>ID:</strong> ${task.id}</div>
+      <div class="detail-meta-item"><strong>Status:</strong> ${task.status}</div>
+      <div class="detail-meta-item"><strong>Type:</strong> ${task.type}</div>
+      <div class="detail-meta-item"><strong>Priority:</strong> P${task.priority}</div>
+      ${data.feature_id ? `<div class="detail-meta-item"><strong>Feature:</strong> <a href="#" onclick="openFeatureDetail('${data.feature_id}');return false" style="color:var(--accent)">${data.feature_id}</a></div>` : ''}
+    </div></div>`;
+    if (task.description) html += `<div class="detail-section"><h4>Description</h4><div style="font-size:12px;color:var(--text2)">${esc(task.description)}</div></div>`;
+    if (task.success_criteria) html += `<div class="detail-section"><h4>Success Criteria</h4><div style="font-size:12px;color:var(--text2)">${esc(task.success_criteria)}</div></div>`;
+    if (tl.length) {
+      html += `<div class="detail-section"><h4>Timeline (${tl.length})</h4><div class="timeline">`;
+      for (const item of tl) {
+        if (item.type === 'commit') {
+          html += `<div class="tl-item tl-commit"><div class="tl-time">${fmtTime(item.time)}</div><div class="tl-title">Commit <code>${(item.sha||'').slice(0,8)}</code></div><div class="tl-content">${esc(item.message||'')}</div></div>`;
+        } else if (item.type === 'memory') {
+          html += `<div class="tl-item tl-memory"><div class="tl-time">${fmtTime(item.time)} <span class="tl-badge badge-type">${item.memory_type||''}</span> <span class="tl-badge" style="background:var(--surface2);color:var(--text2)">${item.relationship||''}</span></div><div class="tl-title">${esc(item.title||'')}</div><div class="tl-content">${esc((item.content||'').slice(0,300))}</div></div>`;
+        } else if (item.type === 'activity' && item.action !== 'heartbeat') {
+          html += `<div class="tl-item tl-activity"><div class="tl-time">${fmtTime(item.time)}</div><div class="tl-title">${toolIcon(item.icon)} ${esc(item.action||'')} ${esc((item.file||'').split('/').pop())}</div>${item.detail?`<div class="tl-content">${esc(item.detail.slice(0,100))}</div>`:''}</div>`;
+        }
+      }
+      html += '</div></div>';
+    } else {
+      html += '<div class="detail-section"><h4>Timeline</h4><div class="empty-state">No activity yet</div></div>';
+    }
+    document.getElementById('detailBody').innerHTML = html;
+  } catch(e) { document.getElementById('detailBody').innerHTML = `<div class="empty-state">Error: ${e.message}</div>`; }
+}
+
+async function openFeatureDetail(featureId) {
+  document.getElementById('detailTitle').textContent = 'Loading...';
+  document.getElementById('detailBody').innerHTML = '';
+  openDetail();
+  try {
+    const data = await get(`/feature/history/${featureId}`);
+    const f = data.feature, p = data.progress, tasks = data.tasks || [];
+    document.getElementById('detailTitle').textContent = f.title;
+    let html = `<div class="detail-section"><div class="detail-meta">
+      <div class="detail-meta-item"><strong>Status:</strong> ${f.status}</div>
+      <div class="detail-meta-item"><strong>Progress:</strong> ${p.done}/${p.total} (${p.percent}%)</div>
+    </div></div>`;
+    if (f.description) html += `<div class="detail-section"><h4>Description</h4><div style="font-size:12px;color:var(--text2)">${esc(f.description)}</div></div>`;
+    for (const td of tasks) {
+      const t = td.task, mems = td.memories||[], commits = td.commits||[];
+      const sc = {'done':'var(--done)','in_progress':'var(--progress)','blocked':'var(--blocked)'}[t.status]||'var(--text2)';
+      html += `<div class="detail-section"><h4 style="cursor:pointer" onclick="openTaskDetail('${t.id}')"><span style="color:${sc}">●</span> ${esc(t.title)} [${t.status}]</h4>`;
+      const items = [];
+      commits.forEach(c => items.push({time:c.created_at,type:'commit',...c}));
+      mems.forEach(m => items.push({time:m.created_at,type:'memory',...m}));
+      items.sort((a,b)=>(a.time||'').localeCompare(b.time||''));
+      if (items.length) {
+        html += '<div class="timeline">';
+        for (const item of items) {
+          if (item.type==='commit') html += `<div class="tl-item tl-commit"><div class="tl-time">${fmtTime(item.time)}</div><div class="tl-title"><code>${(item.sha||'').slice(0,8)}</code> ${esc(item.message||'')}</div></div>`;
+          else html += `<div class="tl-item tl-memory"><div class="tl-time">${fmtTime(item.time)} <span class="tl-badge badge-type">${item.type||''}</span></div><div class="tl-title">${esc(item.title||'')}</div><div class="tl-content">${esc((item.content||'').slice(0,200))}</div></div>`;
+        }
+        html += '</div>';
+      } else html += '<div style="font-size:11px;color:var(--text2);padding:4px 0">No activity yet</div>';
+      html += '</div>';
+    }
+    document.getElementById('detailBody').innerHTML = html;
+  } catch(e) { document.getElementById('detailBody').innerHTML = `<div class="empty-state">Error: ${e.message}</div>`; }
+}
 
 async function refresh() {
   await loadStatus();

@@ -323,6 +323,135 @@ def features_board(project_id: str):
     return {"features": engine.features.get_full_view(project_id)}
 
 
+@app.get("/task/history/{task_id}")
+def task_history(task_id: str):
+    """Get full timeline for a task: events, memories, commits."""
+    engine = get_engine()
+    from opero.db.schema import get_connection
+    conn = get_connection(engine.project_path)
+
+    task = engine.tasks.get(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    timeline = []
+
+    # Activity events for this task
+    rows = conn.execute(
+        "SELECT * FROM claude_activity WHERE task_id = ? ORDER BY created_at ASC",
+        (task_id,),
+    ).fetchall()
+    for r in rows:
+        d = dict(r)
+        timeline.append({
+            "time": d.get("created_at", ""),
+            "type": "activity",
+            "icon": d.get("tool_name", ""),
+            "action": d.get("action", ""),
+            "detail": d.get("detail", ""),
+            "file": d.get("file_path", ""),
+        })
+
+    # Memories linked to this task
+    mem_rows = conn.execute(
+        """SELECT me.*, ml.relationship FROM memory_entries me
+           JOIN memory_links ml ON me.id = ml.memory_id
+           WHERE ml.linked_type = 'task' AND ml.linked_id = ?
+           ORDER BY me.created_at ASC""",
+        (task_id,),
+    ).fetchall()
+    for r in mem_rows:
+        d = dict(r)
+        timeline.append({
+            "time": d.get("created_at", ""),
+            "type": "memory",
+            "memory_type": d.get("type", ""),
+            "title": d.get("title", ""),
+            "content": d.get("content", ""),
+            "relationship": d.get("relationship", ""),
+            "tags": d.get("tags", "[]"),
+        })
+
+    # Commits linked to this task
+    commit_rows = conn.execute(
+        "SELECT * FROM git_commits WHERE task_id = ? ORDER BY created_at ASC",
+        (task_id,),
+    ).fetchall()
+    for r in commit_rows:
+        d = dict(r)
+        timeline.append({
+            "time": d.get("created_at", ""),
+            "type": "commit",
+            "sha": d.get("sha", ""),
+            "message": d.get("message", ""),
+            "author": d.get("author", ""),
+        })
+
+    conn.close()
+
+    # Sort everything by time
+    timeline.sort(key=lambda x: x.get("time", ""))
+
+    return {
+        "task": task.to_dict(),
+        "feature_id": task.feature_id,
+        "timeline": timeline,
+    }
+
+
+@app.get("/feature/history/{feature_id}")
+def feature_history(feature_id: str):
+    """Get full timeline for a feature: all tasks with their timelines."""
+    engine = get_engine()
+    feature = engine.features.get(feature_id)
+    if not feature:
+        raise HTTPException(status_code=404, detail="Feature not found")
+
+    tasks = engine.features.get_tasks(feature_id)
+    progress = engine.features.get_progress(feature_id)
+
+    from opero.db.schema import get_connection
+    conn = get_connection(engine.project_path)
+
+    # Feature-level events
+    feature_events = conn.execute(
+        "SELECT * FROM claude_activity WHERE detail LIKE ? ORDER BY created_at ASC",
+        (f"%{feature_id}%",),
+    ).fetchall()
+
+    # Aggregate timeline from all tasks
+    task_summaries = []
+    for t in tasks:
+        # Get memories for this task
+        mems = conn.execute(
+            """SELECT me.type, me.title, me.content, me.created_at, ml.relationship
+               FROM memory_entries me JOIN memory_links ml ON me.id = ml.memory_id
+               WHERE ml.linked_type = 'task' AND ml.linked_id = ?
+               ORDER BY me.created_at ASC""",
+            (t.id,),
+        ).fetchall()
+
+        # Get commits for this task
+        commits = conn.execute(
+            "SELECT sha, message, created_at FROM git_commits WHERE task_id = ? ORDER BY created_at ASC",
+            (t.id,),
+        ).fetchall()
+
+        task_summaries.append({
+            "task": t.to_dict(),
+            "memories": [dict(m) for m in mems],
+            "commits": [dict(c) for c in commits],
+        })
+
+    conn.close()
+
+    return {
+        "feature": feature.to_dict(),
+        "progress": progress,
+        "tasks": task_summaries,
+    }
+
+
 @app.get("/executions/active")
 def active_executions():
     engine = get_engine()
