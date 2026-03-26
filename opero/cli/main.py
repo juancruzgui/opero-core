@@ -205,14 +205,22 @@ def cmd_sync(args):
 
 
 def cmd_serve(args):
-    """Start the MCP server."""
+    """Start the MCP server with dashboard."""
     engine = get_engine()
     if not engine.is_initialized():
         print("✦ Project not initialized. Run 'opero init' first.")
         return
 
     port = args.port or 7437
-    print(f"✦ Starting Opero MCP server on port {port}...")
+    print(f"✦ Starting Opero dashboard on http://localhost:{port}")
+    print(f"  API docs: http://localhost:{port}/docs")
+    print()
+
+    # Open browser
+    if not args.no_open:
+        import webbrowser
+        import threading
+        threading.Timer(1.0, lambda: webbrowser.open(f"http://localhost:{port}")).start()
 
     import uvicorn
     os.environ["OPERO_PROJECT_PATH"] = os.getcwd()
@@ -443,8 +451,9 @@ def main():
     subparsers.add_parser("sync", help="Sync git state with Opero")
 
     # serve
-    serve_parser = subparsers.add_parser("serve", help="Start the MCP server")
+    serve_parser = subparsers.add_parser("serve", help="Start dashboard + API server")
     serve_parser.add_argument("--port", type=int, default=7437)
+    serve_parser.add_argument("--no-open", action="store_true", help="Don't open browser")
 
     # memory
     mem_parser = subparsers.add_parser("memory", help="Manage project memory (vector-backed)")

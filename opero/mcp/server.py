@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from opero.core.engine import OperoEngine
@@ -13,6 +16,11 @@ from opero.core.models import Task, TaskType, TaskStatus
 from opero.core.memory import MemoryEntry, MemoryType
 
 app = FastAPI(title="Opero Core MCP", version="0.1.0")
+
+# Serve the dashboard UI
+_static_dir = Path(__file__).parent / "static"
+if _static_dir.exists():
+    app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
 
 # Engine is initialized with current working directory or OPERO_PROJECT_PATH
 _engine: OperoEngine | None = None
@@ -114,6 +122,15 @@ class LinkMemoryRequest(BaseModel):
 
 # --- Endpoints ---
 
+@app.get("/")
+def dashboard():
+    """Serve the Opero dashboard."""
+    index = Path(__file__).parent / "static" / "index.html"
+    if index.exists():
+        return FileResponse(str(index))
+    return {"message": "Dashboard not found. API is running.", "docs": "/docs"}
+
+
 @app.get("/health")
 def health():
     return {"status": "ok", "version": "0.1.0"}
@@ -208,6 +225,18 @@ def run_task(req: RunTaskRequest):
         raise HTTPException(status_code=404, detail="Task not found")
     execution = engine.agents.run_task(task)
     return {"execution": execution.to_dict()}
+
+
+@app.get("/executions/active")
+def active_executions():
+    engine = get_engine()
+    from opero.db.schema import get_connection
+    conn = get_connection(engine.project_path)
+    rows = conn.execute(
+        "SELECT * FROM task_executions WHERE status IN ('pending', 'running') ORDER BY started_at DESC"
+    ).fetchall()
+    conn.close()
+    return {"executions": [dict(r) for r in rows]}
 
 
 @app.get("/agents")

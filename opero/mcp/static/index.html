@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Opero Core</title>
+<style>
+:root {
+  --bg: #0a0a0b;
+  --surface: #141416;
+  --surface2: #1c1c1f;
+  --border: #2a2a2e;
+  --text: #e4e4e7;
+  --text2: #a1a1aa;
+  --accent: #8b5cf6;
+  --accent2: #6d28d9;
+  --todo: #3f3f46;
+  --progress: #2563eb;
+  --done: #16a34a;
+  --blocked: #dc2626;
+  --font: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.header h1 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.header .project-name {
+  color: var(--text2);
+  font-size: 13px;
+}
+
+.header .status-bar {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  font-size: 12px;
+  color: var(--text2);
+}
+
+.header .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--done);
+  display: inline-block;
+}
+
+.tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  padding: 0 24px;
+}
+
+.tab {
+  padding: 10px 20px;
+  cursor: pointer;
+  color: var(--text2);
+  border-bottom: 2px solid transparent;
+  font-size: 13px;
+  transition: all 0.15s;
+}
+
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* Kanban */
+.kanban {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  padding: 20px 24px;
+  height: calc(100vh - 140px);
+  overflow: hidden;
+}
+
+.column {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.column-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.column-header .count {
+  background: var(--surface2);
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  color: var(--text2);
+}
+
+.column-body {
+  padding: 8px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.card {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 8px;
+  cursor: default;
+  transition: border-color 0.15s;
+}
+
+.card:hover { border-color: var(--accent); }
+
+.card .card-id {
+  font-size: 10px;
+  color: var(--text2);
+  margin-bottom: 4px;
+  font-family: var(--font);
+}
+
+.card .card-title {
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 6px;
+}
+
+.card .card-meta {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.badge-type {
+  background: var(--accent2);
+  color: white;
+}
+
+.badge-priority {
+  background: var(--surface);
+  color: var(--text2);
+  border: 1px solid var(--border);
+}
+
+.badge-agent {
+  background: #1e3a5f;
+  color: #60a5fa;
+}
+
+.badge-priority.p1 { color: #ef4444; border-color: #ef4444; }
+.badge-priority.p2 { color: #f97316; border-color: #f97316; }
+
+.col-todo .column-header { border-left: 3px solid var(--todo); }
+.col-progress .column-header { border-left: 3px solid var(--progress); }
+.col-done .column-header { border-left: 3px solid var(--done); }
+.col-blocked .column-header { border-left: 3px solid var(--blocked); }
+
+/* Agents panel */
+.agents-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+  padding: 20px 24px;
+}
+
+.agent-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.agent-card .agent-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+
+.agent-card .agent-desc {
+  font-size: 12px;
+  color: var(--text2);
+  margin-bottom: 10px;
+}
+
+.agent-card .agent-caps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.agent-card .agent-status {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text2);
+}
+
+.agent-card .agent-status.active {
+  color: var(--done);
+}
+
+/* Memory panel */
+.memory-panel {
+  padding: 20px 24px;
+}
+
+.search-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.search-bar input {
+  flex: 1;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 13px;
+  outline: none;
+}
+
+.search-bar input:focus { border-color: var(--accent); }
+
+.search-bar button {
+  background: var(--accent2);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 16px;
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 13px;
+}
+
+.search-bar button:hover { background: var(--accent); }
+
+.memory-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.memory-item {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px 16px;
+}
+
+.memory-item .mem-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.memory-item .mem-title {
+  font-weight: 500;
+  font-size: 13px;
+}
+
+.memory-item .mem-content {
+  font-size: 12px;
+  color: var(--text2);
+  margin-top: 4px;
+}
+
+.memory-item .mem-tags {
+  display: flex;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.tag {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: var(--surface2);
+  color: var(--text2);
+  border: 1px solid var(--border);
+}
+
+/* Activity feed */
+.activity-panel {
+  padding: 20px 24px;
+  max-width: 800px;
+}
+
+.activity-item {
+  display: flex;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+
+.activity-item .time {
+  color: var(--text2);
+  min-width: 140px;
+  flex-shrink: 0;
+}
+
+.activity-item .event-type {
+  font-weight: 600;
+  min-width: 100px;
+}
+
+.activity-item .detail { color: var(--text2); }
+
+.panel { display: none; }
+.panel.active { display: block; }
+
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text2);
+}
+
+/* Refresh indicator */
+.refresh-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--done);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>✦ Opero Core</h1>
+    <span class="project-name" id="projectName">Loading...</span>
+  </div>
+  <div class="status-bar">
+    <span id="gitBranch">—</span>
+    <span id="taskSummary">—</span>
+    <div class="refresh-dot" title="Auto-refreshing every 3s"></div>
+  </div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" data-panel="kanban">Board</div>
+  <div class="tab" data-panel="agents">Agents</div>
+  <div class="tab" data-panel="memory">Memory</div>
+  <div class="tab" data-panel="activity">Activity</div>
+</div>
+
+<div id="kanban" class="panel active">
+  <div class="kanban">
+    <div class="column col-todo">
+      <div class="column-header">Todo <span class="count" id="countTodo">0</span></div>
+      <div class="column-body" id="colTodo"></div>
+    </div>
+    <div class="column col-progress">
+      <div class="column-header">In Progress <span class="count" id="countProgress">0</span></div>
+      <div class="column-body" id="colProgress"></div>
+    </div>
+    <div class="column col-done">
+      <div class="column-header">Done <span class="count" id="countDone">0</span></div>
+      <div class="column-body" id="colDone"></div>
+    </div>
+    <div class="column col-blocked">
+      <div class="column-header">Blocked <span class="count" id="countBlocked">0</span></div>
+      <div class="column-body" id="colBlocked"></div>
+    </div>
+  </div>
+</div>
+
+<div id="agents" class="panel">
+  <div class="agents-grid" id="agentsGrid"></div>
+</div>
+
+<div id="memory" class="panel">
+  <div class="memory-panel">
+    <div class="search-bar">
+      <input type="text" id="memorySearch" placeholder="Search memory (semantic)..." />
+      <button onclick="searchMemory()">Search</button>
+    </div>
+    <div class="memory-list" id="memoryList"></div>
+  </div>
+</div>
+
+<div id="activity" class="panel">
+  <div class="activity-panel" id="activityFeed"></div>
+</div>
+
+<script>
+const API = '';
+let projectId = null;
+let activeExecutions = {};
+
+// --- Tabs ---
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById(tab.dataset.panel).classList.add('active');
+  });
+});
+
+// --- API helpers ---
+async function get(url) {
+  const r = await fetch(API + url);
+  return r.json();
+}
+
+async function post(url, body) {
+  const r = await fetch(API + url, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body),
+  });
+  return r.json();
+}
+
+// --- Render helpers ---
+function renderCard(task) {
+  const priorityClass = task.priority <= 2 ? ` p${task.priority}` : '';
+  const agent = task.assigned_agent
+    ? `<span class="badge badge-agent">${task.assigned_agent}</span>` : '';
+
+  return `
+    <div class="card">
+      <div class="card-id">${task.id}</div>
+      <div class="card-title">${escHtml(task.title)}</div>
+      <div class="card-meta">
+        <span class="badge badge-type">${task.type}</span>
+        <span class="badge badge-priority${priorityClass}">P${task.priority}</span>
+        ${agent}
+      </div>
+    </div>
+  `;
+}
+
+function escHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+// --- Load data ---
+async function loadStatus() {
+  try {
+    const data = await get('/project/status');
+    if (!data.initialized) return;
+
+    projectId = data.project.id;
+    document.getElementById('projectName').textContent =
+      `${data.project.name} (${data.project.id})`;
+    document.getElementById('gitBranch').textContent =
+      `${data.git.branch}${data.git.has_changes ? ' *' : ''}`;
+    document.getElementById('taskSummary').textContent =
+      `${data.tasks.todo}T ${data.tasks.in_progress}P ${data.tasks.done}D ${data.tasks.blocked}B`;
+  } catch(e) {}
+}
+
+async function loadTasks() {
+  try {
+    const data = await get('/tasks' + (projectId ? `?project_id=${projectId}` : ''));
+    const tasks = data.tasks || [];
+
+    const buckets = { todo: [], in_progress: [], done: [], blocked: [] };
+    tasks.forEach(t => {
+      if (buckets[t.status]) buckets[t.status].push(t);
+    });
+
+    document.getElementById('colTodo').innerHTML = buckets.todo.map(renderCard).join('');
+    document.getElementById('colProgress').innerHTML = buckets.in_progress.map(renderCard).join('');
+    document.getElementById('colDone').innerHTML = buckets.done.map(renderCard).join('');
+    document.getElementById('colBlocked').innerHTML = buckets.blocked.map(renderCard).join('');
+
+    document.getElementById('countTodo').textContent = buckets.todo.length;
+    document.getElementById('countProgress').textContent = buckets.in_progress.length;
+    document.getElementById('countDone').textContent = buckets.done.length;
+    document.getElementById('countBlocked').textContent = buckets.blocked.length;
+  } catch(e) {}
+}
+
+async function loadAgents() {
+  try {
+    const data = await get('/agents');
+    const agents = data.agents || [];
+
+    // Get active executions
+    let executions = [];
+    try {
+      const execData = await get('/executions/active');
+      executions = execData.executions || [];
+    } catch(e) {}
+
+    const activeAgents = new Set(executions.map(e => e.agent_name));
+
+    document.getElementById('agentsGrid').innerHTML = agents.map(a => {
+      const caps = JSON.parse(a.capabilities || '[]');
+      const isActive = activeAgents.has(a.name);
+      const activeExec = executions.find(e => e.agent_name === a.name);
+
+      return `
+        <div class="agent-card">
+          <div class="agent-name">${a.name}</div>
+          <div class="agent-desc">${escHtml(a.description || '')}</div>
+          <div class="agent-caps">
+            ${caps.map(c => `<span class="badge badge-type">${c}</span>`).join('')}
+          </div>
+          <div class="agent-status ${isActive ? 'active' : ''}">
+            ${isActive
+              ? `● Working on: ${activeExec ? activeExec.task_id : 'task'}`
+              : '○ Idle'}
+          </div>
+        </div>
+      `;
+    }).join('');
+  } catch(e) {}
+}
+
+async function loadMemory() {
+  if (!projectId) return;
+  try {
+    const data = await get(`/memory/list/${projectId}`);
+    const memories = data.memories || [];
+    renderMemoryList(memories);
+  } catch(e) {}
+}
+
+function renderMemoryList(memories) {
+  document.getElementById('memoryList').innerHTML = memories.length === 0
+    ? '<div class="empty-state">No memories stored yet</div>'
+    : memories.map(m => {
+        const tags = JSON.parse(m.tags || '[]');
+        return `
+          <div class="memory-item">
+            <div class="mem-header">
+              <span class="mem-title">${escHtml(m.title)}</span>
+              <div>
+                <span class="badge badge-type">${m.type}</span>
+                <span class="badge badge-priority p${m.importance}">P${m.importance}</span>
+              </div>
+            </div>
+            <div class="mem-content">${escHtml((m.content || '').slice(0, 300))}</div>
+            ${tags.length ? `<div class="mem-tags">${tags.map(t =>
+              `<span class="tag">${escHtml(t)}</span>`).join('')}</div>` : ''}
+          </div>
+        `;
+      }).join('');
+}
+
+async function searchMemory() {
+  const query = document.getElementById('memorySearch').value.trim();
+  if (!query || !projectId) return;
+  try {
+    const data = await post('/memory/search', { project_id: projectId, query, top_k: 20 });
+    const results = (data.results || []).map(r => ({...r.memory, _score: r.score}));
+    renderMemoryList(results);
+  } catch(e) {}
+}
+
+document.getElementById('memorySearch').addEventListener('keydown', e => {
+  if (e.key === 'Enter') searchMemory();
+});
+
+async function loadActivity() {
+  try {
+    const commits = await get('/git/log?count=20');
+    const feed = document.getElementById('activityFeed');
+
+    if (!commits.commits || commits.commits.length === 0) {
+      feed.innerHTML = '<div class="empty-state">No git activity yet</div>';
+      return;
+    }
+
+    feed.innerHTML = commits.commits.map(c => `
+      <div class="activity-item">
+        <span class="time">${c.date ? new Date(c.date).toLocaleString() : '—'}</span>
+        <span class="event-type">commit</span>
+        <span class="detail">
+          <code>${c.sha.slice(0,8)}</code> ${escHtml(c.message)} — ${escHtml(c.author)}
+        </span>
+      </div>
+    `).join('');
+  } catch(e) {}
+}
+
+// --- Init + auto-refresh ---
+async function refresh() {
+  await loadStatus();
+  await loadTasks();
+
+  const activeTab = document.querySelector('.tab.active')?.dataset.panel;
+  if (activeTab === 'agents') await loadAgents();
+  if (activeTab === 'memory') await loadMemory();
+  if (activeTab === 'activity') await loadActivity();
+}
+
+// Load agents/memory/activity on tab switch
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', async () => {
+    if (tab.dataset.panel === 'agents') await loadAgents();
+    if (tab.dataset.panel === 'memory') await loadMemory();
+    if (tab.dataset.panel === 'activity') await loadActivity();
+  });
+});
+
+refresh();
+setInterval(refresh, 3000);
+</script>
+</body>
+</html>
