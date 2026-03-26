@@ -248,7 +248,11 @@ def launch_interactive(project_path: str, project_id: str,
 
 
 def _start_dashboard_background(project_path: str, port: int = 7437):
-    """Start the dashboard server in the background and open in browser."""
+    """Start the dashboard server in the background and open in browser.
+
+    Always kills any existing dashboard on the port first to ensure
+    we're running the latest code from the installed venv.
+    """
     import time
     import webbrowser
     from urllib.request import urlopen
@@ -256,13 +260,22 @@ def _start_dashboard_background(project_path: str, port: int = 7437):
 
     url = f"http://localhost:{port}"
 
-    # Check if already running
+    # Always kill existing dashboard to ensure latest code
     try:
-        urlopen(f"{url}/health", timeout=1)
-        # Already running — just open browser
-        webbrowser.open(url)
-        return
-    except (URLError, OSError):
+        import signal as _sig
+        # Find and kill any process on our port
+        result = subprocess.run(
+            ["lsof", "-ti", f":{port}"],
+            capture_output=True, text=True, timeout=5,
+        )
+        for pid_str in result.stdout.strip().split("\n"):
+            if pid_str.strip():
+                try:
+                    os.kill(int(pid_str.strip()), _sig.SIGTERM)
+                except (ProcessLookupError, PermissionError, ValueError):
+                    pass
+        time.sleep(0.5)
+    except Exception:
         pass
 
     # Find the right Python — prefer the venv if it exists
