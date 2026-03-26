@@ -687,57 +687,70 @@ def send_error(request_id: Any, code: int, message: str) -> None:
 
 def main():
     """Run the MCP stdio server."""
-    # Disable buffering
-    sys.stdin = open(sys.stdin.fileno(), 'r', buffering=1)
-    sys.stdout = open(sys.stdout.fileno(), 'w', buffering=1)
+    import traceback
+
+    # Ensure stdout is unbuffered for MCP framing
+    try:
+        sys.stdout = open(sys.stdout.fileno(), 'w', buffering=1)
+    except Exception:
+        pass  # Fall back to default buffering
 
     while True:
-        msg = read_message()
-        if msg is None:
+        try:
+            msg = read_message()
+            if msg is None:
+                break
+
+            method = msg.get("method", "")
+            request_id = msg.get("id")
+            params = msg.get("params", {})
+
+            if method == "initialize":
+                send_result(request_id, {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {
+                        "tools": {"listChanged": False},
+                    },
+                    "serverInfo": {
+                        "name": "opero",
+                        "version": "0.1.0",
+                    },
+                })
+
+            elif method == "notifications/initialized":
+                pass
+
+            elif method == "tools/list":
+                send_result(request_id, {"tools": TOOLS})
+
+            elif method == "tools/call":
+                tool_name = params.get("name", "")
+                arguments = params.get("arguments", {})
+                try:
+                    result = handle_tool(tool_name, arguments)
+                    send_result(request_id, {
+                        "content": [{"type": "text", "text": json.dumps(result, indent=2)}],
+                    })
+                except Exception as e:
+                    sys.stderr.write(f"Tool error ({tool_name}): {e}\n")
+                    send_result(request_id, {
+                        "content": [{"type": "text", "text": json.dumps({"error": str(e)})}],
+                        "isError": True,
+                    })
+
+            elif method == "ping":
+                send_result(request_id, {})
+
+            else:
+                if request_id is not None:
+                    send_error(request_id, -32601, f"Method not found: {method}")
+
+        except json.JSONDecodeError as e:
+            sys.stderr.write(f"JSON parse error: {e}\n")
+            continue
+        except Exception as e:
+            sys.stderr.write(f"MCP server error: {traceback.format_exc()}\n")
             break
-
-        method = msg.get("method", "")
-        request_id = msg.get("id")
-        params = msg.get("params", {})
-
-        if method == "initialize":
-            send_result(request_id, {
-                "protocolVersion": "2024-11-05",
-                "capabilities": {
-                    "tools": {"listChanged": False},
-                },
-                "serverInfo": {
-                    "name": "opero",
-                    "version": "0.1.0",
-                },
-            })
-
-        elif method == "notifications/initialized":
-            pass  # No response needed for notifications
-
-        elif method == "tools/list":
-            send_result(request_id, {"tools": TOOLS})
-
-        elif method == "tools/call":
-            tool_name = params.get("name", "")
-            arguments = params.get("arguments", {})
-            try:
-                result = handle_tool(tool_name, arguments)
-                send_result(request_id, {
-                    "content": [{"type": "text", "text": json.dumps(result, indent=2)}],
-                })
-            except Exception as e:
-                send_result(request_id, {
-                    "content": [{"type": "text", "text": json.dumps({"error": str(e)})}],
-                    "isError": True,
-                })
-
-        elif method == "ping":
-            send_result(request_id, {})
-
-        else:
-            if request_id is not None:
-                send_error(request_id, -32601, f"Method not found: {method}")
 
 
 if __name__ == "__main__":
