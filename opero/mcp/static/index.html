@@ -425,16 +425,11 @@ async function loadFeatures() {
     const board = data.features || [];
     const container = document.getElementById('featuresBoard');
 
-    if (board.length === 0) {
-      container.innerHTML = '<div class="empty-state">No features yet. Create one with:<br><code>opero features add -t "Feature Name"</code></div>';
-      return;
-    }
-
     // Also get orphan tasks (not in any feature)
     const allTasks = await get(`/tasks?project_id=${projectId}`);
     const featureTaskIds = new Set();
     board.forEach(b => b.tasks.forEach(t => featureTaskIds.add(t.id)));
-    const orphans = (allTasks.tasks || []).filter(t => !featureTaskIds.has(t.id) && t.status !== 'done');
+    const orphans = (allTasks.tasks || []).filter(t => !featureTaskIds.has(t.id));
 
     let html = '';
 

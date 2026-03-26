@@ -141,16 +141,27 @@ def _handle_start_work(engine, pid, args):
     for m, s in engine.memory.search(pid, user_request, top_k=5):
         result["relevant_memories"].append({"title": m.title, "content": m.content[:200], "type": m.type.value, "score": round(s, 3)})
 
-    if not feature_id and feature_title:
-        f = engine.features.create(Feature(project_id=pid, title=feature_title, status=FeatureStatus.ACTIVE, priority=2))
-        feature_id = f.id
-        result["feature"] = {"id": f.id, "title": f.title, "created": True}
-    elif feature_id:
+    if feature_id:
+        # Use existing feature
         f = engine.features.get(feature_id)
         if f:
             result["feature"] = {"id": f.id, "title": f.title}
             if f.status == FeatureStatus.PLANNING:
                 engine.features.update(feature_id, status="active")
+    else:
+        # Create a feature — use provided title or derive from task title
+        ft = feature_title or task_title
+        # Check if there's already an active feature we should add to
+        active_features = engine.features.list_features(pid, status=FeatureStatus.ACTIVE)
+        if active_features:
+            # Use the most recent active feature
+            f = active_features[-1]
+            feature_id = f.id
+            result["feature"] = {"id": f.id, "title": f.title, "reused": True}
+        else:
+            f = engine.features.create(Feature(project_id=pid, title=ft, status=FeatureStatus.ACTIVE, priority=2))
+            feature_id = f.id
+            result["feature"] = {"id": f.id, "title": f.title, "created": True}
 
     task = engine.tasks.create(Task(project_id=pid, feature_id=feature_id, title=task_title, description=args.get("task_description", ""), type=TaskType.FEATURE, status=TaskStatus.IN_PROGRESS, priority=2))
     result["task"] = {"id": task.id, "title": task.title, "status": "in_progress"}
