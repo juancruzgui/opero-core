@@ -56,18 +56,22 @@ class ClaudeCodeIntegration:
         sections.append("### MANDATORY Workflow")
         sections.append("Work is organized as: **Project → Features → Tasks**")
         sections.append("")
-        sections.append("**BEFORE writing any code, you MUST call `opero_start_work`.**")
-        sections.append("This tool searches for existing tasks, creates one, stores the user's intent, and gives you relevant memories.")
+        sections.append("You have an MCP server called `opero` with tools. Use them as MCP tools, NOT as bash commands.")
         sections.append("")
-        sections.append("**AFTER finishing work, you MUST call `opero_complete_work`.**")
+        sections.append("**BEFORE writing any code, you MUST use the MCP tool `opero_start_work`.**")
+        sections.append("This is an MCP tool (not a CLI command). Call it via the MCP server `opero`.")
+        sections.append("It searches for existing tasks, creates one, stores the user's intent, and returns relevant memories.")
+        sections.append("")
+        sections.append("**AFTER finishing work, you MUST use the MCP tool `opero_complete_work`.**")
         sections.append("This stores what you built, what you learned, and any decisions made.")
         sections.append("")
-        sections.append("1. User asks for something → call `opero_start_work` with their request, your intent, and thought process")
+        sections.append("1. User asks for something → use MCP tool `opero_start_work` with their request, your intent, and thought process")
         sections.append("2. Review the returned existing tasks and memories — don't duplicate work")
         sections.append("3. Write code (Opero auto-commits every change)")
-        sections.append("4. When done → call `opero_complete_work` with outcome, learnings, and decisions")
+        sections.append("4. When done → use MCP tool `opero_complete_work` with outcome, learnings, and decisions")
         sections.append("5. **DO NOT commit manually** — Opero handles git automatically")
         sections.append("6. **DO NOT skip opero_start_work** — every piece of work must be tracked")
+        sections.append("7. **These are MCP tools, NOT CLI commands** — do not run them in Bash")
         sections.append("")
 
         # Commands reference
@@ -289,23 +293,38 @@ class ClaudeCodeIntegration:
         return settings_path
 
     def install_mcp(self) -> Path:
-        """Configure Opero MCP server in Claude Code settings."""
+        """Configure Opero MCP server in Claude Code settings.local.json."""
         settings_dir = Path(self.project_path) / ".claude"
         settings_dir.mkdir(exist_ok=True)
-        settings_path = settings_dir / "settings.json"
 
+        # MCP servers go in settings.local.json (Claude Code reads MCP from here)
+        local_path = settings_dir / "settings.local.json"
         existing = {}
-        if settings_path.exists():
+        if local_path.exists():
             try:
-                existing = json.loads(settings_path.read_text())
+                existing = json.loads(local_path.read_text())
             except (json.JSONDecodeError, OSError):
                 pass
 
         mcp = self.get_mcp_config()
-        existing.update(mcp)
+        if "mcpServers" not in existing:
+            existing["mcpServers"] = {}
+        existing["mcpServers"].update(mcp.get("mcpServers", {}))
 
-        settings_path.write_text(json.dumps(existing, indent=2) + "\n")
-        return settings_path
+        local_path.write_text(json.dumps(existing, indent=2) + "\n")
+
+        # Also remove mcpServers from settings.json if present (cleanup)
+        settings_path = settings_dir / "settings.json"
+        if settings_path.exists():
+            try:
+                shared = json.loads(settings_path.read_text())
+                if "mcpServers" in shared:
+                    del shared["mcpServers"]
+                    settings_path.write_text(json.dumps(shared, indent=2) + "\n")
+            except (json.JSONDecodeError, OSError):
+                pass
+
+        return local_path
 
     def _find_python(self) -> str:
         """Find the Python interpreter that has opero installed.
@@ -584,7 +603,7 @@ def handle_user_prompt(hook_input: dict = None):
         active_features = [f for f in features if f.status.value == "active"]
 
         lines = []
-        lines.append("[OPERO] MANDATORY: Call opero_start_work BEFORE writing any code. Call opero_complete_work when done.")
+        lines.append("[OPERO] MANDATORY: Use the MCP tool opero_start_work (from the 'opero' MCP server) BEFORE writing any code. Use opero_complete_work when done. These are MCP tools, NOT bash commands.")
 
         if in_progress:
             task_list = ", ".join(f"{t.title} ({t.id})" for t in in_progress[:3])
