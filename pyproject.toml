@@ -20,3 +20,6 @@ opero = "opero.cli.main:main"
 
 [tool.setuptools.packages.find]
 include = ["opero*"]
+
+[tool.setuptools.package-data]
+"opero.mcp" = ["static/**/*"]
