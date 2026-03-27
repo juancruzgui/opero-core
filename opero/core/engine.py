@@ -73,6 +73,13 @@ class OperoEngine:
         # Ensure project .gitignore covers all opero-generated files
         self._update_project_gitignore()
 
+        # Scaffold project structure (React + FastAPI + Supabase)
+        from opero.services.scaffold import scaffold_project
+        scaffold_results = scaffold_project(self.project_path)
+        for svc, result in scaffold_results.items():
+            if result["status"] in ("created", "exists"):
+                self.projects.set_memory(project.id, f"scaffold_{svc}", result["message"], "system")
+
         # Wire up Claude Code automatically
         from opero.integrations.claude_code import ClaudeCodeIntegration
         claude = ClaudeCodeIntegration(self.project_path)
