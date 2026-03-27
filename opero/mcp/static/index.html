@@ -332,6 +332,7 @@ body {
   background: var(--surface); align-items: center;
 }
 .services-bar .svc-label { font-size: 10px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; margin-right: 4px; }
+.services-bar #servicesPills { display: flex; gap: 10px; flex: 1; }
 .svc-pill {
   display: flex; align-items: center; gap: 5px; padding: 3px 10px;
   border-radius: 12px; font-size: 11px; border: 1px solid var(--border);
@@ -922,6 +923,9 @@ async function loadServices() {
       if (s.running) {
         link = `<a href="${s.url}" target="_blank">:${s.port}</a>`;
         btn = `<button class="svc-btn stop" onclick="toggleService('${s.service}','stop')">Stop</button>`;
+      } else if (!s.ready) {
+        link = `<span style="color:var(--text2)">not set up</span>`;
+        btn = '';
       } else if (s.port_busy) {
         link = `<span style="color:#f97316">:${s.port} in use</span>`;
         btn = `<button class="svc-btn" onclick="toggleService('${s.service}','start')">Start (new port)</button>`;

@@ -146,12 +146,25 @@ class ServiceManager:
         pid = self._read_pid(service)
         port = svc.get("port", 0)
         port_busy = not _is_port_free(port) if port else False
+
+        # Check if the service can actually be started (has project structure)
+        ready = True
+        if service == "frontend":
+            ready = (Path(self.project_path) / "package.json").exists()
+        elif service == "backend":
+            cwd = svc.get("cwd_subdir", "")
+            backend_dir = Path(self.project_path) / cwd if cwd else Path(self.project_path)
+            ready = (backend_dir / "main.py").exists() or (backend_dir / "app.py").exists()
+        elif service == "database":
+            ready = (Path(self.project_path) / "supabase").exists()
+
         return {
             "service": service,
             "name": svc.get("name", service),
             "port": port,
             "running": running,
-            "port_busy": port_busy and not running,  # port taken by something else
+            "port_busy": port_busy and not running,
+            "ready": ready,
             "pid": pid,
             "url": f"http://localhost:{port}" if running else None,
             "icon": svc.get("icon", ""),
