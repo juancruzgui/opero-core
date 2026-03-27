@@ -145,7 +145,10 @@ class ServiceManager:
         running = self.is_running(service)
         pid = self._read_pid(service)
         port = svc.get("port", 0)
-        port_busy = not _is_port_free(port) if port else False
+        # Only show port_busy if WE assigned the port (not for supabase which uses fixed ports)
+        port_busy = False
+        if service != "database" and port:
+            port_busy = not _is_port_free(port) and not running
 
         # Check if the service can actually be started (has project structure)
         ready = True
@@ -163,7 +166,7 @@ class ServiceManager:
             "name": svc.get("name", service),
             "port": port,
             "running": running,
-            "port_busy": port_busy and not running,
+            "port_busy": port_busy,
             "ready": ready,
             "pid": pid,
             "url": f"http://localhost:{port}" if running else None,
