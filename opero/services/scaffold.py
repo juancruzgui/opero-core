@@ -122,7 +122,7 @@ python-dotenv>=1.0.0
 """)
 
         # Install deps in the venv if available
-        venv_pip = root / ".opero" / "venv" / "bin" / "pip"
+        venv_pip = (root / ".opero" / "venv" / "bin" / "pip").resolve()
         if venv_pip.exists():
             subprocess.run(
                 [str(venv_pip), "install", "-r", "requirements.txt", "-q"],

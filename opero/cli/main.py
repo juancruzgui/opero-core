@@ -22,7 +22,14 @@ def cmd_init(args):
     if engine.is_initialized():
         project = engine.projects.get_by_path()
         if project:
-            print("✦ Opero already initialized in this directory.")
+            # Already initialized — but ensure scaffolding exists
+            from opero.services.scaffold import scaffold_project
+            results = scaffold_project(os.getcwd())
+            created = [s for s, r in results.items() if r["status"] == "created"]
+            if created:
+                print(f"✦ Scaffolded: {', '.join(created)}")
+            else:
+                print("✦ Opero already initialized in this directory.")
             print(f"  Project: {project.name} ({project.id})")
             return
         # .opero exists but no project — re-initialize
